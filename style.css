@@ -73,6 +73,10 @@ input, [contenteditable] { outline: none; }
   background: linear-gradient(135deg, #f0f2ff 0%, #fdf0f7 100%);
   position: relative;
   overflow: hidden;
+  transition: background .3s;
+}
+body.dark .auth-body {
+  background: linear-gradient(135deg, #0d0f1a 0%, #1a1d2e 100%);
 }
 
 .blob {
@@ -425,9 +429,10 @@ body.dark .contact-item.active { background: rgba(108,99,255,.18); }
   border-radius: 50%;
   border: 2px solid var(--surface);
 }
-.status-online { background: var(--success); }
-.status-away { background: var(--warning); }
-.status-offline { background: var(--text-muted); }
+.status-online  { background: var(--success); }
+.status-away    { background: var(--warning); }
+.status-offline { background: #9ca3af; }
+body.dark .status-offline { background: #4b5563; }
 
 /* Sidebar Footer */
 .sidebar-footer {
@@ -1666,3 +1671,47 @@ body.dark .af-requests-bar { background: rgba(108,99,255,.14); }
   border-color: #ef4444;
 }
 .pp-action-btn.danger:hover { background: rgba(239, 68, 68, .1); }
+
+/* ===== AUTH DARK TOGGLE ===== */
+.auth-theme-toggle {
+  position: fixed;
+  top: 16px;
+  right: 16px;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: 1.5px solid var(--border);
+  background: var(--surface);
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  z-index: 100;
+  box-shadow: var(--shadow-sm);
+  transition: background var(--transition), color var(--transition), border-color var(--transition);
+}
+.auth-theme-toggle:hover { color: var(--primary); border-color: var(--primary); }
+.auth-theme-toggle .icon-sun { display: none; }
+.auth-theme-toggle.is-dark .icon-moon { display: none; }
+.auth-theme-toggle.is-dark .icon-sun  { display: block; }
+
+/* ===== PEER BANNED BANNER ===== */
+.peer-banned-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 18px;
+  background: rgba(245, 158, 11, .10);
+  border-bottom: 2px solid #f59e0b;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+.peer-banned-banner svg {
+  flex-shrink: 0;
+  stroke: #f59e0b;
+}
+.peer-banned-banner strong {
+  color: #d97706;
+  font-weight: 700;
+}

@@ -82,8 +82,21 @@ function applyTheme() {
 // �"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?
 // ================  AUTH PAGE  ================================
 // �"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?
+function authToggleDark() {
+  const isDark = document.body.classList.toggle('dark');
+  localStorage.setItem('darkMode', isDark ? '1' : '0');
+  const btn = $('auth-theme-toggle');
+  if (btn) btn.classList.toggle('is-dark', isDark);
+}
+
 if (IS_AUTH) {
   applyTheme();
+  // Sync toggle button state
+  const isDark = localStorage.getItem('darkMode') === '1';
+  setTimeout(() => {
+    const btn = $('auth-theme-toggle');
+    if (btn) btn.classList.toggle('is-dark', isDark);
+  }, 0);
 
   // Redirect to chat if already signed in
   onAuthStateChanged(auth, user => {
@@ -239,6 +252,7 @@ let currentProfile = null;   // Firestore user doc
 let activeConvId   = null;   // Active conversation Firestore ID
 let activePeer     = null;   // Other user's profile data
 let allConvs       = [];     // All conversations for current user
+let peerStatusUnsubs = {};   // { [uid]: unsubFn } — per-peer status listeners
 let convFilter     = 'all';  // sidebar filter
 let typingTimer    = null;
 
@@ -506,6 +520,10 @@ function updateBlockedBanner() {
   toolbar?.classList.toggle('hidden',  isBlocked);
 }
 
+function updatePeerBannedBanner(isBanned) {
+  $('peer-banned-banner')?.classList.toggle('hidden', !isBanned);
+}
+
 
 if (IS_CHAT) {
   applyTheme();
@@ -623,6 +641,38 @@ function subscribeConversations() {
     }
 
     renderConvList(getFilteredConvs($('search-input')?.value || ''));
+    subscribeAllPeerStatuses();
+  });
+}
+
+function subscribeAllPeerStatuses() {
+  const uid = currentUser?.uid;
+  if (!uid) return;
+
+  // Build set of current peer UIDs
+  const currentPeerIds = new Set(
+    allConvs.map(c => c.members?.find(m => m !== uid)).filter(Boolean)
+  );
+
+  // Unsubscribe peers no longer in conversations
+  Object.keys(peerStatusUnsubs).forEach(peerId => {
+    if (!currentPeerIds.has(peerId)) {
+      peerStatusUnsubs[peerId]();
+      delete peerStatusUnsubs[peerId];
+    }
+  });
+
+  // Subscribe new peers
+  currentPeerIds.forEach(peerId => {
+    if (peerStatusUnsubs[peerId]) return; // already watching
+    peerStatusUnsubs[peerId] = onSnapshot(doc(db, 'users', peerId), snap => {
+      if (!snap.exists()) return;
+      const online = snap.data().status === 'online';
+      const conv = allConvs.find(c => c.members?.includes(peerId));
+      if (!conv) return;
+      const dot = document.querySelector(`.contact-item[data-id="${conv.id}"] .avatar-status`);
+      if (dot) dot.className = `avatar-status ${online ? 'status-online' : 'status-offline'}`;
+    });
   });
 }
 
@@ -669,7 +719,7 @@ function renderConvList(convs) {
     item.innerHTML = `
       <div class="avatar" style="background:${peer.color}">
         ${peer.name.charAt(0)}
-        <div class="avatar-status status-online"></div>
+        <div class="avatar-status status-offline"></div>
       </div>
       <div class="contact-info">
         <div class="contact-name">${sanitize(peer.name)}</div>
@@ -735,7 +785,13 @@ async function openConversation(convId) {
   document.querySelectorAll('.contact-item').forEach(el =>
     el.classList.toggle('active', el.dataset.id === convId));
 
-  // Subscribe to peer's real-time online status
+  // Reset banned banner, then immediately check peer's banned state
+  updatePeerBannedBanner(false);
+  getDoc(doc(db, 'users', peerId)).then(snap => {
+    if (snap.exists()) updatePeerBannedBanner(!!snap.data().banned);
+  });
+
+  // Subscribe to peer's real-time online status (also handles live ban updates)
   subscribePeerStatus(peerId);
 
   // Subscribe to messages
@@ -1135,6 +1191,9 @@ function subscribePeerStatus(peerUid) {
     if (!snap.exists()) return;
     const data   = snap.data();
     const online = data.status === 'online';
+
+    // Show banned notice to the recipient
+    updatePeerBannedBanner(!!data.banned);
 
     // Update chat header
     const statusEl = $('chat-peer-status');
@@ -1712,6 +1771,7 @@ function closeMyProfile() {
 Object.assign(window, {
   // Auth
   switchTab, login, register, googleSignIn, forgotPassword, togglePassword,
+  authToggleDark,
   // Chat
   filterContacts, filterTab, openConversation, sendMessage,
   handleMsgKey, onTyping, clearChat,
