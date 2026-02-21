@@ -2510,3 +2510,113 @@ body.chat-theme-love .message-box:focus {
   border-color: #ec4899 !important;
   box-shadow: 0 0 0 3px rgba(236,72,153,.15) !important;
 }
+
+/* ============================================================
+   VIDEO CALL OVERLAY
+   ============================================================ */
+.call-video-overlay {
+  background: rgba(0, 0, 0, .92);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Pre-connect card (outgoing / incoming video) */
+.vid-call-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  padding: 40px 32px;
+  border-radius: 24px;
+  background: rgba(255,255,255,.07);
+  backdrop-filter: blur(14px);
+  min-width: 280px;
+  text-align: center;
+}
+.vid-call-card .call-sts {
+  font-size: 14px;
+  color: rgba(255,255,255,.7);
+  letter-spacing: .04em;
+}
+.vid-call-card .call-peer-name {
+  font-size: 20px;
+  font-weight: 700;
+  color: #fff;
+}
+
+/* Active video — video elements fill screen */
+#call-video-active {
+  align-items: stretch;
+  justify-content: stretch;
+}
+video.vid-remote {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  background: #111;
+  z-index: 0;
+}
+video.vid-local {
+  position: absolute;
+  bottom: 90px;
+  right: 14px;
+  width: 110px;
+  height: 155px;
+  object-fit: cover;
+  border-radius: 14px;
+  border: 2px solid rgba(255,255,255,.45);
+  box-shadow: 0 4px 18px rgba(0,0,0,.55);
+  z-index: 2;
+}
+.vid-top-bar {
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  z-index: 3;
+  padding: 20px 22px 44px;
+  background: linear-gradient(to bottom, rgba(0,0,0,.65) 0%, transparent 100%);
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  color: #fff;
+}
+.vid-top-bar .call-peer-name {
+  font-size: 17px;
+  font-weight: 600;
+  color: #fff;
+}
+.vid-timer-txt {
+  font-size: 13px;
+  color: rgba(255,255,255,.78);
+  font-variant-numeric: tabular-nums;
+}
+.vid-ctrl-bar {
+  position: absolute;
+  bottom: 0; left: 0; right: 0;
+  z-index: 3;
+  padding: 44px 24px 34px;
+  background: linear-gradient(to top, rgba(0,0,0,.72) 0%, transparent 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 22px;
+}
+
+/* Camera toggle button */
+.call-btn-cam {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background: rgba(255,255,255,.2);
+  color: #fff;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background .2s;
+}
+.call-btn-cam:hover { background: rgba(255,255,255,.32); }
+.call-btn-cam.active { background: rgba(239,68,68,.85); }
