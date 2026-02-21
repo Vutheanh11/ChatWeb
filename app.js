@@ -262,6 +262,109 @@ const EMOJI_CATEGORIES = [
   { icon: '💯', label: 'Symbols', emojis: ['❗','❓','‼️','⁉️','💯','✅','❎','🔰','⭕','🛑','⛔','🚫','❌','⚠️','🔞','♻️','💠','🔷','🔶','🔸','🔹','🔺','🔻','🆗','🆕','🆙','🆒','🆓','🆖','🆚','🅰️','🅱️','🅾️','🚩','🎌','🏴','🏳️','⚜️','🔱','📛','✳️','❇️','🆘','🆔','🉐','🈴','🈺','🈸','🀄','🎴','🃏'] },
 ];
 
+// ── BANNED WORDS FILTER ────────────────────────────────────────
+const BANNED_WORDS = [
+  'nigger','nigga','n1gger','n1gga','nigg3r','nigg4',
+  'faggot','fag','f4ggot','f4g',
+  'kike','k1ke',
+  'spic','sp1c',
+  'chink','ch1nk',
+  'gook',
+  'wetback','beaner',
+  'tranny','tr4nny',
+  'retard','ret4rd',
+  'cunt','c0nt',
+];
+
+async function checkAndRecordViolation(text) {
+  const lower = text.toLowerCase().replace(/[^a-z0-9\s]/g, ' ');
+  const words  = lower.split(/\s+/);
+  const hit    = BANNED_WORDS.some(bw => words.some(w => w === bw || w.includes(bw)));
+  if (!hit) return true;
+
+  const userRef = doc(db, 'users', currentUser.uid);
+  try {
+    const snap       = await getDoc(userRef);
+    const violations = (snap.data()?.violations || 0) + 1;
+    if (violations >= 10) {
+      await updateDoc(userRef, { violations, banned: true });
+      showToast('Your account has been permanently banned for repeated use of prohibited language.', 'danger');
+      setTimeout(() => signOut(auth), 2500);
+      return false;
+    }
+    await updateDoc(userRef, { violations });
+    const left = 10 - violations;
+    const sev  = violations >= 8 ? 'danger' : 'warning';
+    showToast(`\u26a0\ufe0f Prohibited language detected. Warning ${violations}/10 \u2014 ${left} more violation${left === 1 ? '' : 's'} until permanent ban.`, sev);
+  } catch (e) { console.warn('Violation tracking error:', e); }
+  return false;
+}
+
+// ── REPLY / RECALL / MESSAGE MENU ─────────────────────────────
+let _replyTo = null; // { msgId, text, fromName }
+
+function setReplyTo(msgId, text, fromName) {
+  _replyTo = { msgId, text, fromName };
+  const bar = $('reply-preview-bar');
+  if (bar) {
+    $('reply-preview-name').textContent = fromName;
+    $('reply-preview-text').textContent = text.length > 80 ? text.slice(0, 80) + '\u2026' : text;
+    bar.classList.remove('hidden');
+  }
+  $('message-box')?.focus();
+  hideMsgMenu();
+}
+
+function clearReplyTo() {
+  _replyTo = null;
+  $('reply-preview-bar')?.classList.add('hidden');
+}
+
+function showMsgMenu(event, msgId, isMe, msgText, msgFromName) {
+  event.stopPropagation();
+  const menu = $('msg-context-menu');
+  if (!menu) return;
+  const encoded  = btoa(encodeURIComponent(String(msgText).slice(0, 200)));
+  const safeName = String(msgFromName).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+  menu.innerHTML =
+    `<button class="msg-menu-item" onclick="setReplyTo('${msgId}',decodeURIComponent(atob('${encoded}')),'${safeName}')">` +
+    `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polyline points="9 17 4 12 9 7"/><path d="M20 18v-2a4 4 0 00-4-4H4"/></svg>Reply</button>` +
+    (isMe
+      ? `<button class="msg-menu-item danger" onclick="recallMessage('${msgId}')">` +
+        `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 102.13-9.36L1 10"/></svg>Recall message</button>`
+      : '');
+
+  const menuW = 180, menuH = isMe ? 88 : 44;
+  let top  = event.clientY + 4;
+  let left = event.clientX - menuW + 16;
+  if (left < 8)                             left = 8;
+  if (left + menuW > window.innerWidth - 8) left = window.innerWidth - menuW - 8;
+  if (top + menuH > window.innerHeight - 8) top  = event.clientY - menuH - 4;
+  menu.style.top  = top  + 'px';
+  menu.style.left = left + 'px';
+  menu.classList.remove('hidden');
+}
+
+function hideMsgMenu() {
+  $('msg-context-menu')?.classList.add('hidden');
+}
+
+async function recallMessage(msgId) {
+  hideMsgMenu();
+  if (!activeConvId) return;
+  try {
+    await updateDoc(doc(db, 'conversations', activeConvId, 'messages', msgId), {
+      recalled: true,
+      text: 'Message recalled',
+      audioData: null,
+      gifUrl: null,
+    });
+  } catch (err) {
+    showToast('Failed to recall: ' + err.message, 'danger');
+  }
+}
+
+
 // �"?�"? CHAT INIT �"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?
 if (IS_CHAT) {
   applyTheme();
@@ -277,6 +380,13 @@ if (IS_CHAT) {
       currentProfile = (await getDoc(doc(db, 'users', user.uid))).data();
     } else {
       currentProfile = snap.data();
+    }
+
+    // Ban check
+    if (currentProfile?.banned) {
+      showToast('Your account has been permanently banned for violating community guidelines.', 'danger');
+      setTimeout(() => signOut(auth), 2500);
+      return;
     }
 
     // Mark online
@@ -299,10 +409,12 @@ if (IS_CHAT) {
     // Request browser notification permission
     initNotifications();
 
-    // Close dropdown on outside click
+    // Close dropdown / menus on outside click
     document.addEventListener('click', e => {
       if (!e.target.closest('.chat-actions'))
         $('dropdown-menu')?.classList.add('hidden');
+      if (!e.target.closest('.msg-menu-btn') && !e.target.closest('.msg-context-menu'))
+        hideMsgMenu();
       if (e.target.id === 'new-chat-modal')    closeNewChat();
       if (e.target.id === 'settings-modal')    closeSettings();
       if (e.target.id === 'add-friend-modal')  closeAddFriend();
@@ -527,10 +639,11 @@ function renderMessages(msgs) {
       lastFrom = '';
     }
 
-    const isMe   = m.from === uid;
-    const isCont = m.from === lastFrom;
-    const time   = m.sentAt ? fmtTime(m.sentAt) : '';
-    const mtype  = m.type || 'text';
+    const isMe       = m.from === uid;
+    const isCont     = m.from === lastFrom;
+    const isRecalled = !!m.recalled;
+    const time       = m.sentAt ? fmtTime(m.sentAt) : '';
+    const mtype      = m.type || 'text';
 
     const row = document.createElement('div');
     row.className = `msg-row${isMe ? ' me' : ''}${isCont ? ' continuation' : ''}`;
@@ -539,8 +652,11 @@ function renderMessages(msgs) {
       ? `<div class="avatar avatar-xs" style="background:${activePeer?.color || '#6C63FF'}">${(activePeer?.name || '?').charAt(0)}</div>`
       : '<div class="msg-avatar-slot"></div>';
 
+    // Build bubble body
     let bodyHtml;
-    if (mtype === 'gif') {
+    if (isRecalled) {
+      bodyHtml = `<span class="recalled-text">\uD83D\uDD04 Message recalled</span>`;
+    } else if (mtype === 'gif') {
       bodyHtml = `<img class="msg-gif" src="${m.gifUrl}" alt="GIF" loading="lazy"/>`;
     } else if (mtype === 'voice') {
       const dur = m.duration ? ` (${m.duration}s)` : '';
@@ -554,18 +670,39 @@ function renderMessages(msgs) {
           <span class="voice-dur">${dur}</span>
         </div>`;
     } else {
-      bodyHtml = sanitize(m.text);
+      // Reply quote block
+      let replyHtml = '';
+      if (m.replyTo) {
+        const rName = sanitize(m.replyTo.fromName || 'User');
+        const rText = sanitize((m.replyTo.text || '').slice(0, 80) + ((m.replyTo.text || '').length > 80 ? '\u2026' : ''));
+        replyHtml = `<div class="reply-quote"><span class="reply-quote-name">${rName}</span><span class="reply-quote-text">${rText}</span></div>`;
+      }
+      bodyHtml = replyHtml + sanitize(m.text);
     }
+
+    // 3-dot menu button (not shown for recalled messages)
+    const safeText  = isRecalled ? '' : (m.text || '').replace(/\\/g, '\\\\').replace(/`/g, '\\`');
+    const peerName  = isMe ? 'You' : (activePeer?.name || 'User').replace(/'/g, "\\'\\'");
+    const menuHtml  = isRecalled ? '' : `
+      <div class="msg-actions">
+        <button class="msg-menu-btn" title="Options"
+          onclick="showMsgMenu(event,'${m.id}',${isMe},decodeURIComponent(atob('${btoa(encodeURIComponent(safeText.slice(0,200)))}')),'${peerName}')">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor">
+            <circle cx="12" cy="5" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="12" cy="19" r="1.8"/>
+          </svg>
+        </button>
+      </div>`;
 
     row.innerHTML = `
       ${avatarHtml}
-      <div class="bubble">
+      <div class="bubble${isRecalled ? ' recalled' : ''}">
         ${bodyHtml}
         <div class="bubble-footer">
           <span class="msg-time">${time}</span>
           ${isMe ? '<span class="read-receipt">&#10003;&#10003;</span>' : ''}
         </div>
-      </div>`;
+      </div>
+      ${menuHtml}`;
     area.appendChild(row);
     lastFrom = m.from;
   });
@@ -579,17 +716,27 @@ async function sendMessage() {
   const box  = $('message-box');
   const text = box.innerText.trim();
   if (!text) return;
+
+  // Profanity / banned words check
+  const allowed = await checkAndRecordViolation(text);
+  if (!allowed) { box.innerText = ''; box.focus(); return; }
+
   box.innerText = '';
   box.focus();
 
   try {
     const convRef = doc(db, 'conversations', activeConvId);
-    // Add message
-    await addDoc(collection(db, 'conversations', activeConvId, 'messages'), {
+    const msgData = {
       from:   currentUser.uid,
       text,
       sentAt: serverTimestamp(),
-    });
+    };
+    if (_replyTo) {
+      msgData.replyTo = { msgId: _replyTo.msgId, text: _replyTo.text, fromName: _replyTo.fromName };
+    }
+    clearReplyTo();
+
+    await addDoc(collection(db, 'conversations', activeConvId, 'messages'), msgData);
 
     // Update conversation meta
     const peerId = activePeer?.uid;
@@ -1431,6 +1578,8 @@ Object.assign(window, {
   toggleEmojiPicker, openNewChat, closeNewChat, filterModal,
   closeProfilePanel, openSettings, closeSettings, toggleDark,
   closeMobileChat, logout, showToast,
+  // Message actions
+  setReplyTo, clearReplyTo, showMsgMenu, hideMsgMenu, recallMessage,
   // Voice
   startVoiceRecording, stopAndSendVoice, cancelVoiceRecording,
   // GIF

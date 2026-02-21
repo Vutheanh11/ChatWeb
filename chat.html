@@ -166,6 +166,15 @@
 
         <!-- Message Input -->
         <div class="message-input-area">
+          <!-- Reply preview bar -->
+          <div class="reply-preview-bar hidden" id="reply-preview-bar">
+            <div class="reply-preview-content">
+              <span class="reply-preview-label">Replying to</span>
+              <span class="reply-preview-name" id="reply-preview-name"></span>
+              <span class="reply-preview-text" id="reply-preview-text"></span>
+            </div>
+            <button class="icon-btn reply-cancel-btn" onclick="clearReplyTo()" title="Cancel reply">✕</button>
+          </div>
           <div class="input-toolbar">
             <button class="icon-btn" title="Emoji" onclick="toggleEmojiPicker()">
               <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -373,6 +382,9 @@
       </div>
     </div>
   </div>
+
+  <!-- Message context menu -->
+  <div class="msg-context-menu hidden" id="msg-context-menu"></div>
 
   <!-- Toast notification -->
   <div class="toast" id="toast"></div>
