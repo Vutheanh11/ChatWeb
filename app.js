@@ -81,6 +81,9 @@ function applyTheme() {
 function applyChatTheme() {
   const theme = localStorage.getItem('chatTheme') || 'default';
   document.body.classList.toggle('chat-theme-pixel', theme === 'pixel');
+  document.body.classList.toggle('chat-theme-sang',  theme === 'sang');
+  document.body.classList.toggle('chat-theme-beach', theme === 'beach');
+  document.body.classList.toggle('chat-theme-love',  theme === 'love');
   document.querySelectorAll('.theme-opt').forEach(el => el.classList.remove('active'));
   const btn = $('theme-opt-' + theme);
   if (btn) btn.classList.add('active');
