@@ -354,6 +354,7 @@ let allConvs       = [];     // All conversations for current user
 let peerStatusUnsubs = {};   // { [uid]: unsubFn } — per-peer status listeners
 let convFilter     = 'all';  // sidebar filter
 let typingTimer    = null;
+let _blockedByPeer = false;  // true when the peer has blocked the current user
 
 // Unsubscribe handles
 let unsubConvs      = null;
@@ -622,6 +623,7 @@ function updateBlockedBanner() {
 }
 
 function updatePeerBlockedMeBanner(isBlockedByPeer) {
+  _blockedByPeer = isBlockedByPeer;   // persist for guard checks in send functions
   const banner  = $('peer-blocked-me-banner');
   const toolbar = $('input-toolbar');
   const msgBox  = $('message-box');
@@ -978,7 +980,7 @@ async function openConversation(convId) {
 
   // Reset banners, then immediately check peer's banned state
   updatePeerBannedBanner(false);
-  updatePeerBlockedMeBanner(false);
+  updatePeerBlockedMeBanner(false);   // also resets _blockedByPeer
   getDoc(doc(db, 'users', peerId)).then(snap => {
     if (snap.exists()) updatePeerBannedBanner(!!snap.data().banned);
   });
@@ -1161,6 +1163,8 @@ let _recMimeType      = 'audio/webm';
 async function startVoiceRecording() {
   if (_mediaRecorder && _mediaRecorder.state === 'recording') return;
   if (!activeConvId) { showToast('Open a conversation first.', 'warning'); return; }
+  if (_blockedByPeer) { showToast('Bạn đã bị khóa mồm và không thể gửi tin nhắn.', 'danger'); return; }
+  if (activePeer && blockedUsers[activePeer.uid]) { showToast('You have blocked this user.', 'warning'); return; }
 
   try {
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -1548,6 +1552,8 @@ function onGifSearchInput(query) {
 
 async function sendGif(gifUrl, previewUrl) {
   if (!activeConvId) return;
+  if (_blockedByPeer) { showToast('Bạn đã bị khóa mồm và không thể gửi tin nhắn.', 'danger'); return; }
+  if (activePeer && blockedUsers[activePeer.uid]) { showToast('You have blocked this user.', 'warning'); return; }
   closeGifPicker();
 
   try {
