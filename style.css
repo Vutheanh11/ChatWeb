@@ -991,26 +991,29 @@ body.dark .status-offline { background: #4b5563; }
 .toggle-switch input:checked + .slider { background: var(--primary); }
 .toggle-switch input:checked + .slider::before { transform: translateX(18px); }
 
-/* Toast */
+/* Toast — centered in viewport, wraps long violation messages */
 .toast {
   position: fixed;
-  bottom: 28px;
+  top: 50%;
   left: 50%;
-  transform: translateX(-50%) translateY(20px);
+  transform: translate(-50%, calc(-50% - 16px));
   background: #1a1d2e;
   color: #fff;
-  padding: 12px 22px;
-  border-radius: var(--radius-full);
-  font-size: 13px;
+  padding: 14px 24px;
+  border-radius: var(--radius);
+  font-size: 13.5px;
   font-weight: 500;
+  line-height: 1.45;
   box-shadow: var(--shadow-lg);
   opacity: 0;
   transition: opacity .25s ease, transform .25s ease;
   pointer-events: none;
-  z-index: 999;
-  white-space: nowrap;
+  z-index: 9999;
+  white-space: normal;
+  text-align: center;
+  max-width: min(420px, 88vw);
 }
-.toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+.toast.show { opacity: 1; transform: translate(-50%, -50%); }
 .toast.success { background: var(--success); }
 .toast.warning { background: var(--warning); }
 .toast.danger  { background: var(--danger); }
@@ -1202,11 +1205,6 @@ body.dark .af-requests-bar { background: rgba(108,99,255,.14); }
 }
 
 @media (max-width: 768px) {
-  /* Hide secondary header actions on tablets */
-  .chat-header .icon-btn[title="Voice Call"],
-  .chat-header .icon-btn[title="Video Call"] {
-    display: none;
-  }
   .emoji-picker { max-height: 240px; }
   .gif-picker   { max-height: 180px; }
 }
@@ -1234,11 +1232,26 @@ body.dark .af-requests-bar { background: rgba(108,99,255,.14); }
 
   .mobile-back { display: flex; }
 
-  /* Header: hide voice/video on mobile */
-  .chat-header .icon-btn[title="Voice Call"],
-  .chat-header .icon-btn[title="Video Call"],
+  /* Header: keep voice/video/mic visible on mobile — only hide text-search */
   .chat-header .icon-btn[title="Search in chat"] {
     display: none;
+  }
+  /* Shrink action buttons so they all fit the header */
+  .chat-header .icon-btn {
+    width: 34px;
+    height: 34px;
+    min-width: 34px;
+  }
+  /* Peer name truncates instead of pushing buttons off-screen */
+  .chat-peer-info {
+    min-width: 0;
+    overflow: hidden;
+  }
+  .chat-peer-name {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100px;
   }
 
   /* Messages fill remaining space */
@@ -1263,7 +1276,8 @@ body.dark .af-requests-bar { background: rgba(108,99,255,.14); }
     height: 38px;
     min-width: 38px;
   }
-  #voice-btn { display: none; }
+  /* mic button visible on mobile */
+  #voice-btn { display: flex; }
 
   /* Emoji + GIF pickers full width */
   .emoji-picker {

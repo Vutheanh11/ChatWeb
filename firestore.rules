@@ -32,6 +32,12 @@ service cloud.firestore {
                       && request.auth.uid in
                          get(/databases/$(database)/documents/conversations/$(convId)).data.members
                       && request.resource.data.from == request.auth.uid;
+        // Only the original sender can recall (update) their own message
+        allow update: if request.auth != null
+                      && resource.data.from == request.auth.uid;
+        // Only the original sender can delete their own message
+        allow delete: if request.auth != null
+                      && resource.data.from == request.auth.uid;
       }
     }
 
