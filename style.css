@@ -1280,7 +1280,8 @@ body.dark .af-requests-bar { background: rgba(108,99,255,.14); }
 
   /* GIF images fully contained on mobile */
   .bubble { max-width: 80%; }
-  .bubble.gif-bubble { max-width: 80%; padding: 3px; }
+  .bubble.gif-bubble { max-width: 80%; padding: 3px; width: fit-content; }
+  .msg-gif { width: 200px; }   /* slightly smaller GIF on mobile */
 
   /* Modals full screen on mobile (bottom sheet) */
   .modal {
@@ -1321,21 +1322,24 @@ body.dark .af-requests-bar { background: rgba(108,99,255,.14); }
 /* ===== IMAGE MESSAGES ===== */
 .msg-gif {
   display: block;
-  max-width: min(240px, 100%);
-  width: auto;
+  /* Explicit width so the parent gif-bubble fit-content resolves to exactly this */
+  width: 240px;
+  max-width: 100%;   /* never overflow the bubble on very small screens */
   height: auto;
   border-radius: 10px;
 }
-/* GIF bubble: shrink-wrap the image, don't stretch to 72% */
+/* GIF bubble: shrink-wrap around the image (block + fit-content is the
+   simplest reliable approach — inline-flex inside a flex row causes
+   incorrect width resolution in most browsers) */
 .bubble.gif-bubble {
   padding: 3px;
   max-width: 72%;
-  width: fit-content;
-  display: inline-flex;
-  flex-direction: column;
+  width: fit-content;   /* hug the 240px image + 6px padding ≈ 246px */
+  display: block;       /* keep block so bubble-footer doesn't fight sizing */
+  overflow: visible;    /* let the image define the boundary */
 }
 .bubble.gif-bubble .bubble-footer {
-  padding: 0 8px 4px;
+  padding: 0 6px 4px;
   margin-top: 2px;
 }
 
