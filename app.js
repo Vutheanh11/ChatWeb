@@ -522,6 +522,21 @@ function updateBlockedBanner() {
 
 function updatePeerBannedBanner(isBanned) {
   $('peer-banned-banner')?.classList.toggle('hidden', !isBanned);
+  const msgBox = $('message-box');
+  const sendBtn = $('send-btn');
+  if (!msgBox) return;
+  if (isBanned) {
+    msgBox.contentEditable = 'false';
+    msgBox.dataset.placeholder = 'Người dùng này đã bị cấm vì vi phạm quy định';
+    msgBox.textContent = '';
+    msgBox.classList.add('input-banned');
+    if (sendBtn) sendBtn.disabled = true;
+  } else {
+    msgBox.contentEditable = 'true';
+    msgBox.dataset.placeholder = 'Type a message…';
+    msgBox.classList.remove('input-banned');
+    if (sendBtn) sendBtn.disabled = false;
+  }
 }
 
 
@@ -588,7 +603,7 @@ if (IS_CHAT) {
   // Mark offline on unload
   window.addEventListener('beforeunload', () => {
     if (currentUser)
-      updateDoc(doc(db, 'users', currentUser.uid), { status: 'offline' });
+      updateDoc(doc(db, 'users', currentUser.uid), { status: 'offline', lastSeen: serverTimestamp() });
     if (unsubConvs)      unsubConvs();
     if (unsubMsgs)       unsubMsgs();
     if (unsubReqs)       unsubReqs();
@@ -1185,6 +1200,17 @@ async function sendGif(gifUrl, previewUrl) {
 }
 
 // ── PEER REAL-TIME STATUS ────────────────────────────────────
+function fmtLastSeen(lastSeen) {
+  if (!lastSeen) return 'Offline';
+  const ts  = lastSeen.toMillis ? lastSeen.toMillis() : (lastSeen.seconds * 1000);
+  const mins = Math.floor((Date.now() - ts) / 60000);
+  if (mins < 2)  return 'Offline just now';
+  if (mins < 60) return `Offline since ${mins} mins ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `Offline since ${hours} hour${hours > 1 ? 's' : ''} ago`;
+  return 'Offline';
+}
+
 function subscribePeerStatus(peerUid) {
   if (unsubPeerStatus) { unsubPeerStatus(); unsubPeerStatus = null; }
   unsubPeerStatus = onSnapshot(doc(db, 'users', peerUid), snap => {
@@ -1198,7 +1224,7 @@ function subscribePeerStatus(peerUid) {
     // Update chat header
     const statusEl = $('chat-peer-status');
     if (statusEl) {
-      statusEl.textContent  = online ? 'Online' : 'Offline';
+      statusEl.textContent  = online ? 'Online' : fmtLastSeen(data.lastSeen);
       statusEl.style.color  = online ? 'var(--success)' : 'var(--text-muted)';
     }
 
@@ -1420,7 +1446,7 @@ function closeMobileChat() {
 // �"?�"? LOGOUT �"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?
 async function logout() {
   if (currentUser)
-    await updateDoc(doc(db, 'users', currentUser.uid), { status: 'offline' });
+    await updateDoc(doc(db, 'users', currentUser.uid), { status: 'offline', lastSeen: serverTimestamp() });
   await signOut(auth);
   window.location.href = 'index.html';
 }

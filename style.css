@@ -695,6 +695,18 @@ body.dark .status-offline { background: #4b5563; }
   pointer-events: none;
 }
 .message-box:focus { border-color: var(--primary); }
+.message-box.input-banned {
+  background: rgba(239,68,68,.05);
+  border-color: rgba(239,68,68,.3);
+  cursor: not-allowed;
+  color: var(--text-muted);
+  user-select: none;
+}
+.message-box.input-banned::before {
+  content: attr(data-placeholder) !important;
+  color: #ef9090;
+  pointer-events: none;
+}
 
 .btn-send {
   width: 44px; height: 44px;
