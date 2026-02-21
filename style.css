@@ -313,6 +313,49 @@ body.dark .blob { opacity: .12; }
 }
 .verify-back:hover { color: var(--primary); }
 
+/* ===== OTP INPUT BOXES ===== */
+.otp-inputs {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  margin: 12px 0 4px;
+}
+.otp-box {
+  width: 44px;
+  height: 52px;
+  text-align: center;
+  font-size: 1.5rem;
+  font-weight: 700;
+  border: 2px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--text);
+  outline: none;
+  transition: border-color .2s, box-shadow .2s;
+  caret-color: var(--primary);
+}
+.otp-box:focus {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(108, 99, 255, .18);
+}
+.otp-box.error {
+  border-color: #ef4444;
+  animation: otp-shake .35s ease;
+}
+@keyframes otp-shake {
+  0%, 100% { transform: translateX(0); }
+  20%, 60%  { transform: translateX(-5px); }
+  40%, 80%  { transform: translateX(5px); }
+}
+.otp-timer {
+  text-align: center;
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  margin-bottom: 8px;
+}
+.otp-timer span { font-weight: 700; color: var(--primary); }
+.otp-timer.expired span { color: #ef4444; }
+
 /* Password strength */
 .password-strength {
   height: 4px;

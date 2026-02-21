@@ -11,7 +11,7 @@ import {
   signInWithEmailAndPassword, createUserWithEmailAndPassword,
   signOut, updateProfile,
   GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult,
-  sendPasswordResetEmail, sendEmailVerification,
+  sendPasswordResetEmail,
 } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js';
 import {
   getFirestore,
@@ -20,7 +20,7 @@ import {
   query, where, orderBy, limit,
   onSnapshot, serverTimestamp,
 } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js';
-import { firebaseConfig, giphyApiKey } from './firebase-config.js';
+import { firebaseConfig, giphyApiKey, emailJSConfig } from './firebase-config.js';
 
 // �"?�"? Firebase init �"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?
 const app  = initializeApp(firebaseConfig);
@@ -89,6 +89,91 @@ function authToggleDark() {
   if (btn) btn.classList.toggle('is-dark', isDark);
 }
 
+// ── OTP Email Verification ────────────────────────────────────────────────
+let _otpTimerInterval = null;
+
+function generateOTP() {
+  return String(Math.floor(100000 + Math.random() * 900000));
+}
+
+async function sendOTPEmail(toEmail, toName, otp) {
+  const { publicKey, serviceId, templateId } = emailJSConfig;
+  if (!publicKey || publicKey === 'YOUR_EMAILJS_PUBLIC_KEY') {
+    // Dev mode: log OTP to console so developer can test without EmailJS
+    console.warn('[ChatWave OTP]', otp, '— Configure EmailJS in firebase-config.js for production.');
+    showToast(`Dev mode — OTP: ${otp} (check console)`, 'warning');
+    return;
+  }
+  const res = await fetch('https://api.emailjs.com/api/v1.0/email/send', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      service_id:      serviceId,
+      template_id:     templateId,
+      user_id:         publicKey,
+      template_params: { to_email: toEmail, to_name: toName, otp_code: otp },
+    }),
+  });
+  if (!res.ok) throw new Error('Không thể gửi email. Vui lòng thử lại.');
+}
+
+async function saveAndSendOTP(uid, email, name) {
+  const otp    = generateOTP();
+  const expiry = Date.now() + 10 * 60 * 1000; // 10 minutes
+  await updateDoc(doc(db, 'users', uid), { otpCode: otp, otpExpiry: expiry });
+  await sendOTPEmail(email, name, otp);
+  return expiry;
+}
+
+function getOTPValue() {
+  return [...document.querySelectorAll('.otp-box')].map(b => b.value.trim()).join('');
+}
+
+function initOTPBoxes() {
+  const boxes = [...document.querySelectorAll('.otp-box')];
+  boxes.forEach((box, i) => {
+    box.value = '';
+    box.classList.remove('error');
+    box.oninput = () => {
+      box.value = box.value.replace(/\D/g, '').slice(-1);
+      box.classList.remove('error');
+      if (box.value && i < boxes.length - 1) boxes[i + 1].focus();
+    };
+    box.onkeydown = e => {
+      if (e.key === 'Backspace' && !box.value && i > 0) boxes[i - 1].focus();
+    };
+    box.onpaste = e => {
+      e.preventDefault();
+      const digits = (e.clipboardData.getData('text') || '').replace(/\D/g, '').slice(0, 6);
+      digits.split('').forEach((d, j) => { if (boxes[j]) boxes[j].value = d; });
+      boxes[Math.min(digits.length, boxes.length - 1)].focus();
+    };
+  });
+  if (boxes[0]) setTimeout(() => boxes[0].focus(), 100);
+}
+
+function startOTPCountdown(expiryMs) {
+  clearInterval(_otpTimerInterval);
+  const timerDiv = $('otp-timer');
+  const span     = $('otp-countdown');
+  const btn      = $('btn-check-verified');
+  if (btn) { btn.disabled = false; btn.textContent = 'Xác nhận'; }
+  if (timerDiv) timerDiv.classList.remove('expired');
+  function tick() {
+    const rem = Math.max(0, expiryMs - Date.now());
+    const m   = Math.floor(rem / 60000);
+    const s   = Math.floor((rem % 60000) / 1000);
+    if (span) span.textContent = `${m}:${String(s).padStart(2, '0')}`;
+    if (rem === 0) {
+      clearInterval(_otpTimerInterval);
+      if (btn)      { btn.disabled = true; btn.textContent = 'Mã đã hết hạn'; }
+      if (timerDiv) timerDiv.classList.add('expired');
+    }
+  }
+  tick();
+  _otpTimerInterval = setInterval(tick, 1000);
+}
+
 if (IS_AUTH) {
   applyTheme();
   // Sync toggle button state
@@ -106,7 +191,11 @@ if (IS_AUTH) {
         const user = result.user;
         const ref  = doc(db, 'users', user.uid);
         const snap = await getDoc(ref);
-        if (!snap.exists()) await createUserProfile(user, user.displayName || 'User');
+        if (!snap.exists()) {
+          await createUserProfile(user, user.displayName || 'User', true);
+        } else if (!snap.data().emailVerified) {
+          await updateDoc(ref, { emailVerified: true });
+        }
         // onAuthStateChanged will redirect to chat.html
       }
     } catch (err) {
@@ -117,9 +206,19 @@ if (IS_AUTH) {
   })();
 
   // Redirect to chat if already signed in AND verified
-  onAuthStateChanged(auth, user => {
-    if (user && user.emailVerified)  { window.location.href = 'chat.html'; return; }
-    if (user && !user.emailVerified) { showVerifyScreen(user.email); }
+  onAuthStateChanged(auth, async user => {
+    if (!user) return;
+    // Google / OAuth users: Firebase Auth's emailVerified is authoritative
+    if (user.emailVerified) { window.location.href = 'chat.html'; return; }
+    // Email/password users: check Firestore emailVerified field
+    try {
+      const snap = await getDoc(doc(db, 'users', user.uid));
+      if (snap.exists() && snap.data().emailVerified === true) {
+        window.location.href = 'chat.html';
+      } else if (snap.exists()) {
+        showVerifyScreen(user.email);
+      }
+    } catch (_) {}
   });
 
   // Password strength
@@ -143,12 +242,17 @@ async function login() {
   btn.textContent = 'Signing in...'; btn.disabled = true;
   try {
     const { user } = await signInWithEmailAndPassword(auth, email, pass);
-    if (!user.emailVerified) {
-      showVerifyScreen(user.email);
-      btn.textContent = 'Sign In'; btn.disabled = false;
-      return;
-    }
-    // onAuthStateChanged will redirect
+    // Google / OAuth users: trust Firebase Auth's emailVerified
+    if (user.emailVerified) return; // onAuthStateChanged handles redirect
+    // Check Firestore emailVerified for email/password accounts
+    const snap = await getDoc(doc(db, 'users', user.uid));
+    if (snap.data()?.emailVerified === true) return; // onAuthStateChanged handles redirect
+    // Not verified — generate and send a fresh OTP
+    const name   = snap.data()?.name || 'User';
+    const expiry = await saveAndSendOTP(user.uid, email, name);
+    showVerifyScreen(email);
+    startOTPCountdown(expiry);
+    btn.textContent = 'Sign In'; btn.disabled = false;
   } catch (err) {
     btn.textContent = 'Sign In'; btn.disabled = false;
     showToast(friendlyAuthError(err.code), 'danger');
@@ -168,9 +272,11 @@ async function register() {
     const { user } = await createUserWithEmailAndPassword(auth, email, pass);
     await updateProfile(user, { displayName: name });
     await createUserProfile(user, name);
-    await sendEmailVerification(user);
+    // Generate and send OTP
+    const expiry = await saveAndSendOTP(user.uid, email, name);
     btn.textContent = 'Create Account'; btn.disabled = false;
     showVerifyScreen(email);
+    startOTPCountdown(expiry);
   } catch (err) {
     btn.textContent = 'Create Account'; btn.disabled = false;
     showToast(friendlyAuthError(err.code), 'danger');
@@ -184,39 +290,66 @@ function showVerifyScreen(email) {
   $('form-verify')?.classList.remove('hidden');
   const el = $('verify-email-display');
   if (el) el.textContent = email || '';
+  initOTPBoxes();
 }
 
-async function checkVerified() {
+async function verifyOTP() {
   const user = auth.currentUser;
   if (!user) { backToLogin(); return; }
+  const code = getOTPValue();
+  if (code.length < 6) { showToast('Vui lòng nhập đủ 6 chữ số.', 'warning'); return; }
+
   const btn = $('btn-check-verified');
-  if (btn) { btn.textContent = 'Checking...'; btn.disabled = true; }
+  if (btn) { btn.textContent = 'Đang xác nhận...'; btn.disabled = true; }
   try {
-    await user.reload();
-    if (auth.currentUser?.emailVerified) {
-      window.location.href = 'chat.html';
-    } else {
-      showToast('Email not verified yet. Please check your inbox.', 'warning');
-      if (btn) { btn.textContent = 'I\u2019ve verified \u2014 Continue'; btn.disabled = false; }
+    const snap = await getDoc(doc(db, 'users', user.uid));
+    const data = snap.data() || {};
+    if (!data.otpCode) {
+      showToast('Không tìm thấy mã OTP. Vui lòng gửi lại.', 'danger');
+      if (btn) { btn.textContent = 'Xác nhận'; btn.disabled = false; }
+      return;
     }
+    if (Date.now() > (data.otpExpiry || 0)) {
+      showToast('Mã đã hết hạn. Vui lòng nhấn Gửi lại mã.', 'danger');
+      if (btn) { btn.textContent = 'Mã đã hết hạn'; btn.disabled = true; }
+      return;
+    }
+    if (code !== String(data.otpCode)) {
+      [...document.querySelectorAll('.otp-box')].forEach(b => b.classList.add('error'));
+      showToast('Mã không đúng. Vui lòng kiểm tra lại.', 'danger');
+      if (btn) { btn.textContent = 'Xác nhận'; btn.disabled = false; }
+      return;
+    }
+    // ✅ OTP correct — mark as verified in Firestore
+    await updateDoc(doc(db, 'users', user.uid), {
+      emailVerified: true,
+      otpCode:       null,
+      otpExpiry:     null,
+    });
+    clearInterval(_otpTimerInterval);
+    window.location.href = 'chat.html';
   } catch (err) {
-    showToast('Error: ' + err.message, 'danger');
-    if (btn) { btn.textContent = 'I\u2019ve verified \u2014 Continue'; btn.disabled = false; }
+    showToast('Lỗi: ' + err.message, 'danger');
+    if (btn) { btn.textContent = 'Xác nhận'; btn.disabled = false; }
   }
 }
 
 async function resendVerification() {
   const user = auth.currentUser;
-  if (!user) { showToast('Session expired. Please sign in again.', 'danger'); backToLogin(); return; }
+  if (!user) { showToast('Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.', 'danger'); backToLogin(); return; }
   const btn = $('btn-resend-verify');
-  if (btn) { btn.textContent = 'Sending...'; btn.disabled = true; }
+  if (btn) { btn.textContent = 'Đang gửi...'; btn.disabled = true; }
   try {
-    await sendEmailVerification(user);
-    showToast('Verification email resent! Check your inbox.', 'success');
+    const snap = await getDoc(doc(db, 'users', user.uid));
+    const name   = snap.data()?.name || 'User';
+    const expiry = await saveAndSendOTP(user.uid, user.email, name);
+    initOTPBoxes();
+    startOTPCountdown(expiry);
+    showToast('Đã gửi mã mới! Kiểm tra hộp thư của bạn.', 'success');
   } catch (err) {
-    showToast('Could not resend: ' + err.message, 'danger');
+    showToast('Không thể gửi: ' + err.message, 'danger');
   }
-  if (btn) { btn.textContent = 'Resend verification email'; btn.disabled = false; }
+  if (btn) { btn.textContent = 'Gửi lại mã'; btn.disabled = false; }
 }
 
 async function backToLogin(e) {
@@ -237,7 +370,11 @@ async function googleSignIn() {
     const { user } = await signInWithPopup(auth, provider);
     const ref  = doc(db, 'users', user.uid);
     const snap = await getDoc(ref);
-    if (!snap.exists()) await createUserProfile(user, user.displayName || 'User');
+    if (!snap.exists()) {
+      await createUserProfile(user, user.displayName || 'User', true);
+    } else if (!snap.data().emailVerified) {
+      await updateDoc(ref, { emailVerified: true });
+    }
     // onAuthStateChanged handles redirect
   } catch (err) {
     if (err.code === 'auth/popup-blocked' ||
@@ -269,7 +406,7 @@ async function forgotPassword(e) {
   }
 }
 
-async function createUserProfile(user, name) {
+async function createUserProfile(user, name, verified = false) {
   const handle = name.toLowerCase().replace(/[^a-z0-9]/g, '') +
     Math.floor(Math.random() * 9000 + 1000);
   await setDoc(doc(db, 'users', user.uid), {
@@ -281,6 +418,7 @@ async function createUserProfile(user, name) {
     about: 'Hey there! I\'m using ChatWave.',
     status: 'online',
     createdAt: serverTimestamp(),
+    emailVerified: verified,
   });
 }
 
@@ -632,11 +770,15 @@ if (IS_CHAT) {
   applyTheme();
 
   onAuthStateChanged(auth, async user => {
-    if (!user || !user.emailVerified) { window.location.href = 'index.html'; return; }
+    if (!user) { window.location.href = 'index.html'; return; }
     currentUser = user;
 
-    // Load or create user profile
+    // Load user profile (also used for emailVerified check)
     const snap = await getDoc(doc(db, 'users', user.uid));
+    // Google / OAuth: trust Firebase Auth emailVerified; email/password: check Firestore field
+    if (!user.emailVerified && !snap.data()?.emailVerified) {
+      window.location.href = 'index.html'; return;
+    }
     if (!snap.exists()) {
       await createUserProfile(user, user.displayName || user.email.split('@')[0]);
       currentProfile = (await getDoc(doc(db, 'users', user.uid))).data();
@@ -1885,7 +2027,7 @@ function closeMyProfile() {
 Object.assign(window, {
   // Auth
   switchTab, login, register, googleSignIn, forgotPassword, togglePassword,
-  authToggleDark, checkVerified, resendVerification, backToLogin,
+  authToggleDark, verifyOTP, resendVerification, backToLogin,
   // Chat
   filterContacts, filterTab, openConversation, sendMessage,
   handleMsgKey, onTyping, clearChat,
