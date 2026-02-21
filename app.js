@@ -42,7 +42,7 @@ function uidColor(uid) {
   return PALETTE[s % PALETTE.length];
 }
 
-// �"?�"? Shared UI helpers �"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?
+//Shared UI helpers
 function showToast(msg, type = '') {
   const t = document.getElementById('toast');
   if (!t) return;
@@ -77,6 +77,17 @@ function applyTheme() {
   document.body.classList.toggle('dark', dark);
   const t = $('dark-toggle');
   if (t) t.checked = dark;
+}
+function applyChatTheme() {
+  const theme = localStorage.getItem('chatTheme') || 'default';
+  document.body.classList.toggle('chat-theme-pixel', theme === 'pixel');
+  document.querySelectorAll('.theme-opt').forEach(el => el.classList.remove('active'));
+  const btn = $('theme-opt-' + theme);
+  if (btn) btn.classList.add('active');
+}
+function setChatTheme(theme) {
+  localStorage.setItem('chatTheme', theme);
+  applyChatTheme();
 }
 
 // �"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?
@@ -376,6 +387,7 @@ const BANNED_WORDS = [
   'tranny','tr4nny',
   'retard','ret4rd',
   'cunt','c0nt',
+  'Đói ai hẻo','Địt Mẹ Mày',
 ];
 
 async function checkAndRecordViolation(text) {
@@ -630,6 +642,7 @@ function updatePeerBannedBanner(isBanned) {
 
 if (IS_CHAT) {
   applyTheme();
+  applyChatTheme();
 
   onAuthStateChanged(auth, async user => {
     if (!user || !user.emailVerified) { window.location.href = 'index.html'; return; }
@@ -665,6 +678,9 @@ if (IS_CHAT) {
     // Subscribe to conversations
     subscribeConversations();
 
+    // Subscribe to incoming voice calls
+    subscribeIncomingCalls();
+
     // Subscribe to incoming friend requests (badge)
     subscribeIncomingRequests();
 
@@ -692,6 +708,7 @@ if (IS_CHAT) {
   window.addEventListener('beforeunload', () => {
     if (currentUser)
       updateDoc(doc(db, 'users', currentUser.uid), { status: 'offline', lastSeen: serverTimestamp() });
+    _vcCleanup();
     if (unsubConvs)      unsubConvs();
     if (unsubMsgs)       unsubMsgs();
     if (unsubReqs)       unsubReqs();
@@ -1183,6 +1200,197 @@ async function _sendVoiceBlob(blob) {
 // ── GIF PICKER ──────────────────────────────────────────────
 let gifSearchTimer = null;
 
+// ── VOICE CALLS (WebRTC + Firestore signaling) ──────────────
+const STUN_SERVERS = {
+  iceServers: [
+    { urls: 'stun:stun.l.google.com:19302' },
+    { urls: 'stun:stun1.l.google.com:19302' },
+  ],
+};
+let _vc_pc           = null;
+let _vc_callId       = null;
+let _vc_role         = null;
+let _vc_localStream  = null;
+let _vc_remoteAudio  = null;
+let _vc_timerInt     = null;
+let _vc_timerSecs    = 0;
+let _vc_muted        = false;
+let _vc_unsubCall    = null;
+let _vc_unsubCallerIC = null;
+let _vc_unsubCalleeIC = null;
+let _vc_unsubIncoming = null;
+let _vc_incomingName  = '';
+
+async function startVoiceCall(peerId) {
+  if (!currentUser || !peerId) { showToast('Select a conversation first.', 'warning'); return; }
+  if (_vc_pc) { showToast('Already in a call.', 'warning'); return; }
+  try {
+    _vc_localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+  } catch {
+    showToast('Microphone access denied.', 'danger'); return;
+  }
+  _vc_role = 'caller';
+  _vc_pc   = new RTCPeerConnection(STUN_SERVERS);
+  _vc_localStream.getTracks().forEach(t => _vc_pc.addTrack(t, _vc_localStream));
+  _vc_remoteAudio = new Audio(); _vc_remoteAudio.autoplay = true;
+  _vc_pc.ontrack = e => { _vc_remoteAudio.srcObject = e.streams[0]; };
+
+  const callRef = await addDoc(collection(db, 'calls'), {
+    caller:     currentUser.uid,
+    callerName: currentProfile?.name || currentUser.displayName || 'Unknown',
+    callee:     peerId,
+    status:     'calling',
+    createdAt:  serverTimestamp(),
+  });
+  _vc_callId = callRef.id;
+
+  _vc_pc.onicecandidate = async e => {
+    if (e.candidate)
+      await addDoc(collection(db, 'calls', _vc_callId, 'callerCandidates'), e.candidate.toJSON());
+  };
+  const offer = await _vc_pc.createOffer();
+  await _vc_pc.setLocalDescription(offer);
+  await updateDoc(doc(db, 'calls', _vc_callId), { offer: { type: offer.type, sdp: offer.sdp } });
+
+  _vcShowUI('outgoing', activePeer?.name || 'Unknown');
+
+  _vc_unsubCall = onSnapshot(doc(db, 'calls', _vc_callId), async snap => {
+    const d = snap.data();
+    if (!d) return;
+    if (d.status === 'declined') { _vcCleanup('Call declined.'); return; }
+    if (d.status === 'ended')    { _vcCleanup('Call ended.');    return; }
+    if (d.answer && _vc_pc && !_vc_pc.remoteDescription) {
+      await _vc_pc.setRemoteDescription(new RTCSessionDescription(d.answer));
+      _vcShowUI('active', activePeer?.name || 'Unknown');
+      _vcStartTimer();
+    }
+  });
+  _vc_unsubCalleeIC = onSnapshot(collection(db, 'calls', _vc_callId, 'calleeCandidates'), snap => {
+    snap.docChanges().forEach(async ch => {
+      if (ch.type === 'added' && _vc_pc)
+        await _vc_pc.addIceCandidate(new RTCIceCandidate(ch.doc.data())).catch(() => {});
+    });
+  });
+}
+
+async function answerVoiceCall() {
+  if (!_vc_callId || _vc_role !== 'callee') return;
+  try {
+    _vc_localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+  } catch {
+    showToast('Microphone access denied.', 'danger');
+    await declineVoiceCall(); return;
+  }
+  _vc_pc = new RTCPeerConnection(STUN_SERVERS);
+  _vc_localStream.getTracks().forEach(t => _vc_pc.addTrack(t, _vc_localStream));
+  _vc_remoteAudio = new Audio(); _vc_remoteAudio.autoplay = true;
+  _vc_pc.ontrack = e => { _vc_remoteAudio.srcObject = e.streams[0]; };
+  _vc_pc.onicecandidate = async e => {
+    if (e.candidate)
+      await addDoc(collection(db, 'calls', _vc_callId, 'calleeCandidates'), e.candidate.toJSON());
+  };
+  const snap = await getDoc(doc(db, 'calls', _vc_callId));
+  await _vc_pc.setRemoteDescription(new RTCSessionDescription(snap.data().offer));
+  _vc_unsubCallerIC = onSnapshot(collection(db, 'calls', _vc_callId, 'callerCandidates'), snap => {
+    snap.docChanges().forEach(async ch => {
+      if (ch.type === 'added' && _vc_pc)
+        await _vc_pc.addIceCandidate(new RTCIceCandidate(ch.doc.data())).catch(() => {});
+    });
+  });
+  const answer = await _vc_pc.createAnswer();
+  await _vc_pc.setLocalDescription(answer);
+  await updateDoc(doc(db, 'calls', _vc_callId), {
+    answer: { type: answer.type, sdp: answer.sdp },
+    status: 'answered',
+  });
+  _vcShowUI('active', _vc_incomingName);
+  _vcStartTimer();
+  _vc_unsubCall = onSnapshot(doc(db, 'calls', _vc_callId), snap => {
+    if (snap.data()?.status === 'ended') _vcCleanup('Call ended.');
+  });
+}
+
+async function declineVoiceCall() {
+  if (_vc_callId)
+    await updateDoc(doc(db, 'calls', _vc_callId), { status: 'declined' }).catch(() => {});
+  _vcCleanup();
+}
+
+async function endVoiceCall() {
+  if (_vc_callId)
+    await updateDoc(doc(db, 'calls', _vc_callId), { status: 'ended' }).catch(() => {});
+  _vcCleanup('Call ended.');
+}
+
+function toggleCallMute() {
+  _vc_muted = !_vc_muted;
+  _vc_localStream?.getAudioTracks().forEach(t => { t.enabled = !_vc_muted; });
+  const btn = $('call-mute-btn');
+  if (btn) { btn.classList.toggle('active', _vc_muted); btn.title = _vc_muted ? 'Unmute' : 'Mute'; }
+}
+
+function _vcStartTimer() {
+  _vc_timerSecs = 0;
+  clearInterval(_vc_timerInt);
+  _vc_timerInt = setInterval(() => {
+    _vc_timerSecs++;
+    const m = String(Math.floor(_vc_timerSecs / 60)).padStart(2, '0');
+    const s = String(_vc_timerSecs % 60).padStart(2, '0');
+    const el = $('call-timer');
+    if (el) el.textContent = `${m}:${s}`;
+  }, 1000);
+}
+
+function _vcCleanup(msg) {
+  [_vc_unsubCall, _vc_unsubCallerIC, _vc_unsubCalleeIC].forEach(u => u?.());
+  _vc_unsubCall = _vc_unsubCallerIC = _vc_unsubCalleeIC = null;
+  _vc_pc?.close(); _vc_pc = null;
+  _vc_localStream?.getTracks().forEach(t => t.stop()); _vc_localStream = null;
+  if (_vc_remoteAudio) { _vc_remoteAudio.srcObject = null; _vc_remoteAudio = null; }
+  clearInterval(_vc_timerInt); _vc_timerInt = null;
+  _vc_callId = null; _vc_role = null; _vc_muted = false;
+  $('call-outgoing')?.classList.add('hidden');
+  $('call-incoming')?.classList.add('hidden');
+  $('call-active')?.classList.add('hidden');
+  if (msg) showToast(msg, 'info');
+}
+
+function _vcShowUI(type, peerName) {
+  $('call-outgoing')?.classList.add('hidden');
+  $('call-incoming')?.classList.add('hidden');
+  $('call-active')?.classList.add('hidden');
+  const id  = type === 'outgoing' ? 'call-outgoing' : type === 'incoming' ? 'call-incoming' : 'call-active';
+  const el  = $(id);
+  if (!el) return;
+  el.querySelectorAll('.call-peer-name').forEach(n => n.textContent = peerName);
+  if ($('call-timer')) $('call-timer').textContent = '00:00';
+  // sync avatar letter
+  const avId = type === 'outgoing' ? 'call-out-av' : type === 'incoming' ? 'call-in-av' : 'call-active-av';
+  const avEl = $(avId);
+  if (avEl) avEl.textContent = peerName.charAt(0).toUpperCase() || '?';
+  el.classList.remove('hidden');
+}
+
+function subscribeIncomingCalls() {
+  if (_vc_unsubIncoming || !currentUser) return;
+  const q = query(
+    collection(db, 'calls'),
+    where('callee', '==', currentUser.uid),
+    where('status', '==', 'calling')
+  );
+  _vc_unsubIncoming = onSnapshot(q, snap => {
+    snap.docChanges().forEach(ch => {
+      if (ch.type === 'added' && !_vc_pc) {
+        const d         = ch.doc.data();
+        _vc_callId       = ch.doc.id;
+        _vc_role         = 'callee';
+        _vc_incomingName = d.callerName || 'Unknown';
+        _vcShowUI('incoming', _vc_incomingName);
+      }
+    });
+  });
+}
+
 function toggleGifPicker() {
   const panel = $('gif-picker');
   if (!panel) return;
@@ -1515,6 +1723,7 @@ function openSettings() {
   modal.classList.remove('hidden');
   const t = $('dark-toggle');
   if (t) t.checked = document.body.classList.contains('dark');
+  applyChatTheme(); // sync active theme button
 }
 function closeSettings() { $('settings-modal')?.classList.add('hidden'); }
 function toggleDark(checkbox) {
@@ -1892,14 +2101,17 @@ Object.assign(window, {
   toggleChatSearch, searchMessages, toggleDropdown,
   toggleEmojiPicker, openNewChat, closeNewChat, filterModal,
   closeProfilePanel, openSettings, closeSettings, toggleDark,
+  applyChatTheme, setChatTheme,
   closeMobileChat, logout, showToast,
   // Message actions
   setReplyTo, clearReplyTo, showMsgMenu, hideMsgMenu, recallMessage,
   deleteMsg, enterSelectMode, exitSelectMode, toggleMsgSelect,
   rerenderSelectBar, deleteSelectedMsgs,
   blockUser, loadBlockedUsers, updateBlockBtn, updateBlockedBanner,
-  // Voice
+  // Voice messages
   startVoiceRecording, stopAndSendVoice, cancelVoiceRecording,
+  // Voice calls
+  startVoiceCall, answerVoiceCall, declineVoiceCall, endVoiceCall, toggleCallMute,
   // GIF
   toggleGifPicker, closeGifPicker, onGifSearchInput, sendGif,
   // Add Friend
