@@ -48,5 +48,22 @@ service cloud.firestore {
                     && (resource.data.from == request.auth.uid
                         || resource.data.to == request.auth.uid);
     }
+
+    // ── Voice Calls (WebRTC signaling) ─────────────────
+    match /calls/{callId} {
+      // Any authenticated user can create a call doc
+      allow create: if request.auth != null;
+      // Only the caller or callee can read / update the call doc
+      allow read, update: if request.auth != null
+                          && (request.auth.uid == resource.data.caller
+                              || request.auth.uid == resource.data.callee);
+      // ICE candidate sub-collections: both parties can read & create
+      match /callerCandidates/{c} {
+        allow read, create: if request.auth != null;
+      }
+      match /calleeCandidates/{c} {
+        allow read, create: if request.auth != null;
+      }
+    }
   }
 }

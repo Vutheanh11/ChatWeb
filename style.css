@@ -1310,10 +1310,13 @@ body.dark .af-requests-bar { background: rgba(108,99,255,.14); }
   height: auto;
   border-radius: 10px;
 }
-/* GIF bubble: remove inner padding so image fills edge-to-edge */
+/* GIF bubble: shrink-wrap the image, don't stretch to 72% */
 .bubble.gif-bubble {
   padding: 3px;
   max-width: 72%;
+  width: fit-content;
+  display: inline-flex;
+  flex-direction: column;
 }
 .bubble.gif-bubble .bubble-footer {
   padding: 0 8px 4px;
