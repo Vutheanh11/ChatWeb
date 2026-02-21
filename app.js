@@ -620,6 +620,31 @@ function updateBlockedBanner() {
   toolbar?.classList.toggle('hidden',  isBlocked);
 }
 
+function updatePeerBlockedMeBanner(isBlockedByPeer) {
+  const banner  = $('peer-blocked-me-banner');
+  const toolbar = $('input-toolbar');
+  const msgBox  = $('message-box');
+  const sendBtn = $('send-btn');
+  banner?.classList.toggle('hidden', !isBlockedByPeer);
+  if (isBlockedByPeer) {
+    toolbar?.classList.add('hidden');
+    if (msgBox) {
+      msgBox.contentEditable = 'false';
+      msgBox.textContent = '';
+    }
+    if (sendBtn) sendBtn.disabled = true;
+  } else {
+    // Only restore toolbar if the user hasn't also blocked the peer
+    if (activePeer && !blockedUsers[activePeer.uid]) {
+      toolbar?.classList.remove('hidden');
+    }
+    if (msgBox) {
+      msgBox.contentEditable = 'true';
+    }
+    if (sendBtn) sendBtn.disabled = false;
+  }
+}
+
 function updatePeerBannedBanner(isBanned) {
   $('peer-banned-banner')?.classList.toggle('hidden', !isBanned);
   const msgBox = $('message-box');
@@ -950,8 +975,9 @@ async function openConversation(convId) {
   document.querySelectorAll('.contact-item').forEach(el =>
     el.classList.toggle('active', el.dataset.id === convId));
 
-  // Reset banned banner, then immediately check peer's banned state
+  // Reset banners, then immediately check peer's banned state
   updatePeerBannedBanner(false);
+  updatePeerBlockedMeBanner(false);
   getDoc(doc(db, 'users', peerId)).then(snap => {
     if (snap.exists()) updatePeerBannedBanner(!!snap.data().banned);
   });
@@ -1568,6 +1594,9 @@ function subscribePeerStatus(peerUid) {
     // Show banned notice to the recipient
     updatePeerBannedBanner(!!data.banned);
 
+    // Check if peer has blocked the current user
+    updatePeerBlockedMeBanner(!!(data.blocked?.[currentUser?.uid]));
+
     // Update chat header
     const statusEl = $('chat-peer-status');
     if (statusEl) {
@@ -2172,7 +2201,7 @@ Object.assign(window, {
   setReplyTo, clearReplyTo, showMsgMenu, hideMsgMenu, recallMessage,
   deleteMsg, enterSelectMode, exitSelectMode, toggleMsgSelect,
   rerenderSelectBar, deleteSelectedMsgs,
-  blockUser, loadBlockedUsers, updateBlockBtn, updateBlockedBanner,
+  blockUser, loadBlockedUsers, updateBlockBtn, updateBlockedBanner, updatePeerBlockedMeBanner,
   // Voice messages
   startVoiceRecording, stopAndSendVoice, cancelVoiceRecording,
   // Voice calls

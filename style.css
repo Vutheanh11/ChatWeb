@@ -1832,6 +1832,23 @@ body.dark .af-requests-bar { background: rgba(108,99,255,.14); }
 .auth-theme-toggle.is-dark .icon-moon { display: none; }
 .auth-theme-toggle.is-dark .icon-sun  { display: block; }
 
+/* ===== PEER BLOCKED ME BANNER ===== */
+.peer-blocked-me-banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px;
+  background: rgba(239, 68, 68, .07);
+  border-top: 2px solid #ef4444;
+  font-size: 13px;
+  color: #ef4444;
+  font-weight: 500;
+}
+.peer-blocked-me-banner svg {
+  flex-shrink: 0;
+  stroke: #ef4444;
+}
+
 /* ===== PEER BANNED BANNER ===== */
 .peer-banned-banner {
   display: flex;
