@@ -1282,7 +1282,7 @@ body.dark .af-requests-bar { background: rgba(108,99,255,.14); }
   .bubble { max-width: 80%; }
   .bubble.gif-bubble { max-width: 80%; padding: 3px; }
 
-  /* Modals full screen on mobile */
+  /* Modals full screen on mobile (bottom sheet) */
   .modal {
     width: 100%;
     max-width: 100%;
@@ -1296,6 +1296,22 @@ body.dark .af-requests-bar { background: rgba(108,99,255,.14); }
   .modal-overlay {
     align-items: flex-end;
   }
+
+  /* Add Friend modal: centered popup (not bottom sheet) on mobile */
+  #add-friend-modal {
+    align-items: center;
+    padding: 0 12px;
+  }
+  #add-friend-modal .modal {
+    position: relative;
+    bottom: auto;
+    left: auto;
+    right: auto;
+    border-radius: 16px;
+    max-height: 88vh;
+    max-width: 100%;
+  }
+  .af-panel { max-height: 240px; }
 
   /* Sidebar footer compact */
   .sidebar-footer {

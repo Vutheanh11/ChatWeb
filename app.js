@@ -704,16 +704,53 @@ if (IS_CHAT) {
       () => $('profile-panel')?.classList.remove('hidden'));
   });
 
-  // Mark offline on unload
+  // ── Presence: mark offline reliably across all platforms ──────────────
+  // Helper: sync status to Firestore (fire-and-forget, keepalive: true)
+  function _setPresence(online) {
+    if (!currentUser) return;
+    const data = online
+      ? { status: 'online',  lastActive: serverTimestamp() }
+      : { status: 'offline', lastSeen:   serverTimestamp() };
+    // navigator.sendBeacon can't use Firestore SDK; use normal updateDoc
+    updateDoc(doc(db, 'users', currentUser.uid), data).catch(() => {});
+  }
+
+  // 1) beforeunload – desktop browsers
   window.addEventListener('beforeunload', () => {
-    if (currentUser)
-      updateDoc(doc(db, 'users', currentUser.uid), { status: 'offline', lastSeen: serverTimestamp() });
+    _setPresence(false);
     _vcCleanup();
     if (unsubConvs)      unsubConvs();
     if (unsubMsgs)       unsubMsgs();
     if (unsubReqs)       unsubReqs();
     if (unsubPeerStatus) unsubPeerStatus();
   });
+
+  // 2) pagehide – iOS Safari / mobile browsers (more reliable than beforeunload)
+  window.addEventListener('pagehide', () => _setPresence(false));
+
+  // 3) visibilitychange – tab switch, phone lock screen, taskbar hide
+  document.addEventListener('visibilitychange', () => {
+    if (!currentUser) return;
+    if (document.visibilityState === 'hidden') {
+      _setPresence(false);
+    } else {
+      _setPresence(true);
+    }
+  });
+
+  // 4) Heartbeat – refresh lastActive every 55 s so stale sessions auto-expire
+  //    (clients that crash / lose network will stop updating and look offline)
+  let _heartbeatId = null;
+  function _startHeartbeat() {
+    if (_heartbeatId) clearInterval(_heartbeatId);
+    _heartbeatId = setInterval(() => {
+      if (currentUser && document.visibilityState !== 'hidden')
+        updateDoc(doc(db, 'users', currentUser.uid), {
+          status: 'online', lastActive: serverTimestamp(),
+        }).catch(() => {});
+    }, 55_000);
+  }
+  _startHeartbeat();
 }
 
 // �"?�"? CONVERSATIONS LIST �"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?
@@ -787,7 +824,15 @@ function subscribeAllPeerStatuses() {
     if (peerStatusUnsubs[peerId]) return; // already watching
     peerStatusUnsubs[peerId] = onSnapshot(doc(db, 'users', peerId), snap => {
       if (!snap.exists()) return;
-      const online = snap.data().status === 'online';
+      const data = snap.data();
+      // Consider online only if status=='online' AND lastActive within 2 minutes
+      // This catches stale sessions (crash / network drop) where heartbeat stopped
+      let online = data.status === 'online';
+      if (online && data.lastActive) {
+        const lastActiveSec = data.lastActive.seconds ?? 0;
+        const ageSec = Math.floor(Date.now() / 1000) - lastActiveSec;
+        if (ageSec > 120) online = false; // heartbeat missed → treat as offline
+      }
       const conv = allConvs.find(c => c.members?.includes(peerId));
       if (!conv) return;
       const dot = document.querySelector(`.contact-item[data-id="${conv.id}"] .avatar-status`);
@@ -1512,7 +1557,13 @@ function subscribePeerStatus(peerUid) {
   unsubPeerStatus = onSnapshot(doc(db, 'users', peerUid), snap => {
     if (!snap.exists()) return;
     const data   = snap.data();
-    const online = data.status === 'online';
+
+    // Derive online state: status field + heartbeat freshness check
+    let online = data.status === 'online';
+    if (online && data.lastActive) {
+      const ageSec = Math.floor(Date.now() / 1000) - (data.lastActive.seconds ?? 0);
+      if (ageSec > 120) online = false; // heartbeat stopped → treat as offline
+    }
 
     // Show banned notice to the recipient
     updatePeerBannedBanner(!!data.banned);
@@ -1520,7 +1571,7 @@ function subscribePeerStatus(peerUid) {
     // Update chat header
     const statusEl = $('chat-peer-status');
     if (statusEl) {
-      statusEl.textContent  = online ? 'Online' : fmtLastSeen(data.lastSeen);
+      statusEl.textContent  = online ? 'Online' : fmtLastSeen(data.lastSeen ?? data.lastActive);
       statusEl.style.color  = online ? 'var(--success)' : 'var(--text-muted)';
     }
 
@@ -1766,6 +1817,10 @@ function subscribeIncomingRequests() {
   unsubReqs = onSnapshot(q, snap => {
     incomingRequests = snap.docs.map(d => ({ id: d.id, ...d.data() }));
     updateAFBadge();
+    // Also re-render if the Add Friend modal is currently open
+    if ($('add-friend-modal') && !$('add-friend-modal').classList.contains('hidden')) {
+      renderIncomingRequestsUI();
+    }
   }, err => {
     // If index not yet created, silently skip
     console.warn('friendRequests index needed:', err.message);
@@ -2023,11 +2078,21 @@ async function acceptRequest(reqId, fromUid) {
     // Update request status
     await updateDoc(doc(db, 'friendRequests', reqId), { status: 'accepted' });
 
-    // Create conversation between the two users
+    // Create conversation between the two users (if it doesn't exist)
     const convId = [currentUser.uid, fromUid].sort().join('_');
     const convRef = doc(db, 'conversations', convId);
-    const existing = await getDoc(convRef);
-    if (!existing.exists()) {
+
+    // Safely check existence: Firestore denies read on non-existent docs with
+    // resource.data checks, so wrap in its own try/catch.
+    let convExists = false;
+    try {
+      const existing = await getDoc(convRef);
+      convExists = existing.exists();
+    } catch (_) {
+      convExists = false; // assume doesn't exist
+    }
+
+    if (!convExists) {
       // Fetch the other user's profile
       const peerSnap = await getDoc(doc(db, 'users', fromUid));
       const peer = peerSnap.exists() ? peerSnap.data() : {};
