@@ -22,7 +22,7 @@
             <path d="M16 2C8.268 2 2 8.268 2 16c0 2.4.612 4.656 1.688 6.624L2 30l7.62-1.656A13.927 13.927 0 0016 30c7.732 0 14-6.268 14-14S23.732 2 16 2z" fill="#6C63FF"/>
             <path d="M10 14h12M10 19h8" stroke="#fff" stroke-width="2" stroke-linecap="round"/>
           </svg>
-          <span>Địt mẹ messenger</span>
+          <span>Chat Gi Bi Ti</span>
         </div>
         <div style="display:flex;gap:4px">
           <button class="icon-btn" title="Add Friend" onclick="openAddFriend()">
@@ -172,15 +172,6 @@
                 <circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/>
               </svg>
             </button>
-            <!-- Image upload -->
-            <input type="file" id="image-file-input" accept="image/*" style="display:none" onchange="handleImageFileSelected(this)"/>
-            <button class="icon-btn" id="image-upload-btn" title="Send Image" onclick="triggerImageUpload()">
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
-                <circle cx="8.5" cy="8.5" r="1.5"/>
-                <polyline points="21 15 16 10 5 21"/>
-              </svg>
-            </button>
             <!-- GIF picker toggle -->
             <button class="icon-btn gif-btn" title="Send GIF" onclick="toggleGifPicker()">
               <span style="font-size:12px;font-weight:700;letter-spacing:-.5px">GIF</span>
@@ -188,11 +179,29 @@
             <div class="message-box-wrapper">
               <div class="message-box" id="message-box" contenteditable="true" data-placeholder="Type a message…" onkeydown="handleMsgKey(event)" oninput="onTyping()"></div>
             </div>
-            <button class="icon-btn" title="Voice message" id="voice-btn" onclick="showToast('Voice messages coming soon!', 'info')">
+
+            <!-- Voice recording idle button -->
+            <button class="icon-btn" title="Voice message" id="voice-btn" onclick="startVoiceRecording()">
               <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z"/><path d="M19 10v2a7 7 0 01-14 0v-2M12 19v4M8 23h8"/>
               </svg>
             </button>
+
+            <!-- Voice recording active UI (hidden by default) -->
+            <div class="voice-recording-bar hidden" id="voice-recording-bar">
+              <span class="rec-dot"></span>
+              <span class="rec-timer" id="rec-timer">0:00</span>
+              <button class="rec-cancel-btn" onclick="cancelVoiceRecording()" title="Cancel">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                  <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                </svg>
+              </button>
+              <button class="rec-send-btn" onclick="stopAndSendVoice()" title="Send voice">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                  <rect x="6" y="6" width="12" height="12" rx="2"/>
+                </svg>
+              </button>
+            </div>
             <button class="btn-send" id="send-btn" onclick="sendMessage()" title="Send">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/>
@@ -200,9 +209,7 @@
             </button>
           </div>
           <!-- Emoji picker panel -->
-          <div class="emoji-picker hidden" id="emoji-picker">
-            <div class="emoji-grid" id="emoji-grid"></div>
-          </div>
+          <div class="emoji-picker hidden" id="emoji-picker"></div>
           <!-- GIF picker panel -->
           <div class="gif-picker hidden" id="gif-picker">
             <div class="gif-search-bar">
@@ -318,24 +325,9 @@
         <button class="icon-btn" onclick="closeMyProfile()">✕</button>
       </div>
       <div class="my-profile-body">
-        <div class="my-profile-avatar-wrap" onclick="triggerAvatarUpload()" title="Change avatar">
-          <div class="my-profile-avatar" id="my-profile-avatar-lg"></div>
-          <div class="avatar-upload-overlay">
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/>
-              <circle cx="12" cy="13" r="4"/>
-            </svg>
-          </div>
-        </div>
+        <div class="my-profile-avatar" id="my-profile-avatar-lg"></div>
         <div class="my-profile-name" id="my-profile-name"></div>
         <div class="my-profile-email" id="my-profile-email"></div>
-        <input type="file" id="avatar-file-input" accept="image/*" style="display:none" onchange="handleAvatarFileSelected(this)"/>
-        <button class="btn-avatar-upload" onclick="triggerAvatarUpload()">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle;margin-right:5px">
-            <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M17 8l-5-5-5 5M12 3v12"/>
-          </svg>
-          Add / Change Avatar
-        </button>
       </div>
     </div>
   </div>

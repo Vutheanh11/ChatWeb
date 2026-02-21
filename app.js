@@ -20,18 +20,12 @@ import {
   query, where, orderBy, limit,
   onSnapshot, serverTimestamp,
 } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js';
-import {
-  getStorage, ref as storageRef,
-  uploadBytes, getDownloadURL,
-} from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-storage.js';
 import { firebaseConfig, giphyApiKey } from './firebase-config.js';
 
 // �"?�"? Firebase init �"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?
-const app     = initializeApp(firebaseConfig);
-const auth    = getAuth(app);
-const db      = getFirestore(app);
-// Explicitly pass the bucket so the SDK never falls back to the wrong URL
-const storage = getStorage(app, `gs://${firebaseConfig.storageBucket}`);
+const app  = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db   = getFirestore(app);
 
 // �"?�"? Detect page �"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?
 const IS_AUTH = !!document.getElementById('form-login');
@@ -254,14 +248,18 @@ let unsubMsgs       = null;
 let unsubReqs       = null;
 let unsubPeerStatus = null;  // watches peer user doc for online status
 
-// Emoji set
-const EMOJIS = [
-  '\uD83D\uDE00','\uD83D\uDE02','\uD83D\uDE0D','\uD83E\uDD70','\uD83D\uDE0E',
-  '\uD83E\uDD14','\uD83D\uDE2D','\uD83D\uDE05','\uD83D\uDD25','\uD83D\uDC4D',
-  '\u2764\uFE0F','\uD83C\uDF89','\u2728','\uD83D\uDE80','\uD83C\uDFA8',
-  '\uD83D\uDCA1','\uD83D\uDE4C','\uD83D\uDE0A','\uD83E\uDD23','\uD83D\uDE0F',
-  '\uD83D\uDE34','\uD83E\uDD73','\uD83D\uDCAA','\uD83D\uDC4B','\uD83C\uDF1F',
-  '\uD83D\uDCAF','\uD83D\uDE4F','\uD83D\uDE22','\uD83E\uDD29','\uD83D\uDE06',
+// Emoji categories
+const EMOJI_CATEGORIES = [
+  { icon: '😊', label: 'Smileys', emojis: ['😀','😃','😄','😁','😆','😅','🤣','😂','🙂','🙃','😉','😊','😇','🥰','😍','🤩','😘','😗','😚','😙','🥲','😋','😛','😜','🤪','😝','🤑','🤗','🤭','🤫','🤔','🤐','🤨','😐','😑','😶','😏','😒','🙄','😬','🤥','😌','😔','😪','🤤','😴','😷','🤒','🤕','🤢','🤮','🤧','🥵','🥶','🥴','😵','🤯','🤠','🥳','🥸','😎','🤓','🧐','😈','👿','💀','☠️','💩','🤡','👹','👺','👻','👽','👾','🤖'] },
+  { icon: '👋', label: 'Gestures', emojis: ['👍','👎','👊','✊','🤛','🤜','👏','🙌','🤲','🤝','🙏','✌️','🤞','🤟','🤘','🤙','👈','👉','👆','👇','☝️','👋','🤚','🖐','✋','🖖','💪','🦾','🫵','🫶','🫂','💅','🦶','🦵','👂','🦻','👀','👁','👄','🦷','👃','🧠','🫀','🫁'] },
+  { icon: '❤️', label: 'Hearts', emojis: ['❤️','🧡','💛','💚','💙','💜','🖤','🤍','🤎','❤️‍🔥','❤️‍🩹','💕','💞','💓','💗','💖','💘','💝','💟','💔','💋','😻','💏','💑','🫂'] },
+  { icon: '🐶', label: 'Animals', emojis: ['🐶','🐱','🐭','🐹','🐰','🦊','🦝','🐻','🐼','🐨','🐯','🦁','🐮','🐷','🐸','🐵','🙈','🙉','🙊','🐔','🐧','🐦','🦆','🦅','🦉','🦇','🐝','🦋','🐛','🐌','🐞','🐟','🐠','🐡','🦈','🐬','🐳','🦭','🐊','🐢','🦎','🐍','🦖','🦕','🐙','🦑','🦐','🦞','🦀','🐘','🦛','🦒','🦘','🦬','🐎','🦓','🐕','🐈'] },
+  { icon: '🍕', label: 'Food', emojis: ['🍎','🍊','🍋','🍇','🍓','🫐','🍒','🥭','🍍','🥥','🥝','🍅','🌽','🥕','🍆','🥑','🫒','🥦','🍔','🍕','🌮','🌯','🥙','🌭','🍟','🍗','🍖','🥩','🥚','🍳','🥞','🧇','🍞','🧀','🥗','🍲','🍛','🍣','🍱','🍤','🍜','🍝','🍙','🎂','🍰','🧁','🍭','🍬','🍫','🍩','🍪','☕','🍵','🧋','🥤','🍺','🍻','🥂','🍷','🥃','🍾'] },
+  { icon: '⚽', label: 'Activity', emojis: ['⚽','🏀','🏈','⚾','🎾','🏐','🏉','🎱','🏓','🏸','🥊','🥋','🎯','🎣','🤿','🎿','🛷','🥌','🎮','🕹','🎲','♟','🎭','🎨','🎬','🎤','🎧','🎵','🎶','🎷','🎺','🎸','🎻','🥁','🎹','🏆','🥇','🥈','🥉','🏅','🎖','🎗','🎫','🎪','🏋️','🤸','🏊','🚴','🧘','🏄','🧗','⛷','🏂'] },
+  { icon: '✈️', label: 'Travel', emojis: ['🚗','🚕','🚙','🚌','🏎','🚓','🚑','🚒','🚜','🏍','🛵','🚲','🛴','✈️','🛫','🛬','🚀','🛸','🚁','🛳','⛵','🚤','🏔','⛰','🌋','🗺','🏕','🏖','🏜','🏝','🏛','🏰','🗼','🗽','🌅','🌄','🌃','🌆','🌇','🌉','🌍','🌎','🌏','🪐','🌐','🗿'] },
+  { icon: '💡', label: 'Objects', emojis: ['💌','📦','💡','🔦','🕯','💰','💳','💎','🪙','📱','💻','⌨','🖥','📷','📸','📹','🎥','📺','📻','🧭','⏰','⌚','🎁','🎊','🎈','🎉','🎀','📣','📢','🔔','💬','💭','🔑','🗝','🔐','🔒','🔓','🪄','💊','🩺','🔭','🔬','🧲','🔋','🧯','🛒','🧳','🔧','🔨','⚙️','🔗','🔫','🏹','🛡','🔪','⚔️','🧸','🪆','🪅'] },
+  { icon: '🌙', label: 'Nature', emojis: ['☀️','🌤','⛅','🌥','☁️','🌧','⛈','🌩','🌨','❄️','🌪','🌫','🌬','🌀','🌈','☔','⚡','🔥','💧','🌊','🌺','🌸','🌼','🌻','🌹','💐','🪷','🌷','🌱','🌿','☘️','🍀','🍃','🍂','🍁','🍄','🌾','🪴','🌵','🎄','🌲','🌳','🌴','🌛','🌙','🌕','⭐','🌟','💫','✨','☄️','🌍','🌏','🪐','🌞'] },
+  { icon: '💯', label: 'Symbols', emojis: ['❗','❓','‼️','⁉️','💯','✅','❎','🔰','⭕','🛑','⛔','🚫','❌','⚠️','🔞','♻️','💠','🔷','🔶','🔸','🔹','🔺','🔻','🆗','🆕','🆙','🆒','🆓','🆖','🆚','🅰️','🅱️','🅾️','🚩','🎌','🏴','🏳️','⚜️','🔱','📛','✳️','❇️','🆘','🆔','🉐','🈴','🈺','🈸','🀄','🎴','🃏'] },
 ];
 
 // �"?�"? CHAT INIT �"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?
@@ -286,7 +284,8 @@ if (IS_CHAT) {
 
     // Render my info in sidebar
     $('my-name').textContent = currentProfile.name;
-    refreshMyAvatar();
+    const av = $('my-avatar');
+    if (av) { av.textContent = currentProfile.name.charAt(0).toUpperCase(); av.style.background = currentProfile.color; }
 
     // Set up emoji picker
     buildEmojiPicker();
@@ -328,19 +327,49 @@ if (IS_CHAT) {
 
 // �"?�"? CONVERSATIONS LIST �"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?
 function subscribeConversations() {
+  // Track the latest known lastAt per conversation so we can detect
+  // genuinely new incoming messages across ALL conversations.
+  const knownLastAt = {};
+  let initialLoad = true;
+
   const q = query(
     collection(db, 'conversations'),
     where('members', 'array-contains', currentUser.uid)
   );
   unsubConvs = onSnapshot(q, snap => {
     allConvs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-    // Sort by lastAt desc client-side (avoids composite index requirement)
     allConvs.sort((a, b) => {
       const ta = a.lastAt?.seconds || 0;
       const tb = b.lastAt?.seconds || 0;
       return tb - ta;
     });
-    renderConvList(getFilteredConvs(''));
+
+    // Detect new messages from peers across ALL conversations
+    if (!initialLoad) {
+      allConvs.forEach(conv => {
+        const newSec = conv.lastAt?.seconds || 0;
+        const oldSec = knownLastAt[conv.id] || 0;
+        // New message arrived?
+        if (newSec > oldSec && conv.lastFrom && conv.lastFrom !== currentUser.uid) {
+          // Only notify if: tab not focused, OR this isn't the currently active conversation
+          const isActiveConv = conv.id === activeConvId && document.hasFocus();
+          if (!isActiveConv) {
+            const peer = getPeerInfo(conv);
+            const body = conv.lastMessage || 'Sent you a message';
+            showBrowserNotification(peer.name, body, null);
+          }
+        }
+        knownLastAt[conv.id] = newSec;
+      });
+    } else {
+      // Seed initial timestamps so we don't fire stale notifications on load
+      allConvs.forEach(conv => {
+        knownLastAt[conv.id] = conv.lastAt?.seconds || 0;
+      });
+      initialLoad = false;
+    }
+
+    renderConvList(getFilteredConvs($('search-input')?.value || ''));
   });
 }
 
@@ -467,7 +496,6 @@ async function openConversation(convId) {
 function subscribeMessages(convId) {
   if (unsubMsgs) { unsubMsgs(); unsubMsgs = null; }
   $('messages-area').innerHTML = '';
-  let knownCount = 0;  // track to detect truly new messages vs. initial load
 
   const q = query(
     collection(db, 'conversations', convId, 'messages'),
@@ -475,22 +503,6 @@ function subscribeMessages(convId) {
   );
   unsubMsgs = onSnapshot(q, snap => {
     const msgs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-    // Show notification for new messages from peer
-    if (msgs.length > knownCount) {
-      const newMsgs = msgs.slice(knownCount);
-      newMsgs.forEach(m => {
-        if (m.from !== currentUser.uid) {
-          const notifBody = m.type === 'image' ? 'Sent an image' :
-                            m.type === 'gif'   ? 'Sent a GIF'   : m.text;
-          showBrowserNotification(
-            activePeer?.name || 'New Message',
-            notifBody,
-            null
-          );
-        }
-      });
-    }
-    knownCount = msgs.length;
     renderMessages(msgs);
   });
 }
@@ -528,10 +540,19 @@ function renderMessages(msgs) {
       : '<div class="msg-avatar-slot"></div>';
 
     let bodyHtml;
-    if (mtype === 'image') {
-      bodyHtml = `<img class="msg-image" src="${m.imageUrl}" alt="Image" loading="lazy" onclick="openLightbox('${m.imageUrl}')"/>`;
-    } else if (mtype === 'gif') {
+    if (mtype === 'gif') {
       bodyHtml = `<img class="msg-gif" src="${m.gifUrl}" alt="GIF" loading="lazy"/>`;
+    } else if (mtype === 'voice') {
+      const dur = m.duration ? ` (${m.duration}s)` : '';
+      bodyHtml = `
+        <div class="msg-voice">
+          <svg class="voice-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z"/>
+            <path d="M19 10v2a7 7 0 01-14 0v-2M12 19v4M8 23h8"/>
+          </svg>
+          <audio class="msg-audio" controls preload="metadata" src="${m.audioData}"></audio>
+          <span class="voice-dur">${dur}</span>
+        </div>`;
     } else {
       bodyHtml = sanitize(m.text);
     }
@@ -594,72 +615,122 @@ function handleMsgKey(e) {
   }
 }
 
-// ── IMAGE UPLOAD ───────────────────────────────────────────
-function triggerImageUpload() {
-  $('image-file-input')?.click();
-}
+// ── VOICE MESSAGES ──────────────────────────────────────────
+let _mediaRecorder    = null;
+let _audioChunks      = [];
+let _recTimer         = null;
+let _recSeconds       = 0;
+let _recMimeType      = 'audio/webm';
 
-async function handleImageFileSelected(input) {
-  const file = input.files[0];
-  if (!file) return;
-  if (!file.type.startsWith('image/')) { showToast('Only image files allowed.', 'warning'); return; }
-  if (file.size > 10 * 1024 * 1024)   { showToast('Image must be under 10 MB.', 'warning'); return; }
+async function startVoiceRecording() {
+  if (_mediaRecorder && _mediaRecorder.state === 'recording') return;
   if (!activeConvId) { showToast('Open a conversation first.', 'warning'); return; }
-  input.value = '';
-
-  const btn = $('image-upload-btn');
-  if (btn) btn.style.opacity = '0.4';
-  showToast('Uploading image...', 'info');
 
   try {
-    const ext      = file.name.split('.').pop().toLowerCase();
-    const filename = `${Date.now()}_${currentUser.uid}.${ext}`;
-    const sRef     = storageRef(storage, `chatImages/${activeConvId}/${filename}`);
-    console.log('[Storage] uploading to', sRef.fullPath);
-    const snap     = await uploadBytes(sRef, file);
-    const url      = await getDownloadURL(snap.ref);
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    const mime = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
+      ? 'audio/webm;codecs=opus'
+      : MediaRecorder.isTypeSupported('audio/ogg;codecs=opus')
+        ? 'audio/ogg;codecs=opus'
+        : 'audio/webm';
+    _recMimeType = mime;
+    _audioChunks = [];
+    _mediaRecorder = new MediaRecorder(stream, { mimeType: mime });
+
+    _mediaRecorder.ondataavailable = e => { if (e.data.size > 0) _audioChunks.push(e.data); };
+
+    _mediaRecorder.onstop = async () => {
+      stream.getTracks().forEach(t => t.stop());
+      const blob = new Blob(_audioChunks, { type: _recMimeType });
+      _hideRecordingBar();
+      await _sendVoiceBlob(blob);
+    };
+
+    _mediaRecorder.start(100);
+    _showRecordingBar();
+  } catch (err) {
+    showToast('Microphone access denied.', 'danger');
+  }
+}
+
+function stopAndSendVoice() {
+  if (_mediaRecorder && _mediaRecorder.state === 'recording') {
+    _mediaRecorder.stop();
+  }
+}
+
+function cancelVoiceRecording() {
+  if (_mediaRecorder) {
+    _mediaRecorder.onstop = () => {}; // suppress finishRecording
+    if (_mediaRecorder.state === 'recording') _mediaRecorder.stop();
+    _mediaRecorder.stream?.getTracks().forEach(t => t.stop());
+    _mediaRecorder = null;
+  }
+  _audioChunks = [];
+  _hideRecordingBar();
+}
+
+function _showRecordingBar() {
+  _recSeconds = 0;
+  $('rec-timer').textContent = '0:00';
+  $('voice-recording-bar')?.classList.remove('hidden');
+  $('voice-btn')?.classList.add('hidden');
+  $('send-btn').style.display = 'none';
+  _recTimer = setInterval(() => {
+    _recSeconds++;
+    const m = Math.floor(_recSeconds / 60);
+    const s = String(_recSeconds % 60).padStart(2, '0');
+    $('rec-timer').textContent = `${m}:${s}`;
+    if (_recSeconds >= 120) stopAndSendVoice(); // 2-min hard cap
+  }, 1000);
+}
+
+function _hideRecordingBar() {
+  clearInterval(_recTimer);
+  $('voice-recording-bar')?.classList.add('hidden');
+  $('voice-btn')?.classList.remove('hidden');
+  $('send-btn').style.display = '';
+}
+
+async function _sendVoiceBlob(blob) {
+  if (!activeConvId) { showToast('No active conversation.', 'warning'); return; }
+  if (blob.size > 950 * 1024) {
+    showToast('Recording too large (max ~2 min). Please try again.', 'warning');
+    return;
+  }
+
+  try {
+    showToast('Sending voice message…', 'info');
+    const audioData = await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload  = () => resolve(reader.result);
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
 
     await addDoc(collection(db, 'conversations', activeConvId, 'messages'), {
       from:     currentUser.uid,
-      type:     'image',
-      imageUrl: url,
-      text:     '[Image]',
+      type:     'voice',
+      audioData,
+      duration: _recSeconds,
+      text:     '\uD83C\uDF99 Voice message',
       sentAt:   serverTimestamp(),
     });
 
     const peerId = activePeer?.uid;
-    const upd = { lastMessage: '[Image]', lastAt: serverTimestamp(), lastFrom: currentUser.uid };
-    if (peerId) upd[`unread.${peerId}`] = (allConvs.find(c => c.id === activeConvId)?.unread?.[peerId] || 0) + 1;
+    const upd = {
+      lastMessage: '\uD83C\uDF99 Voice message',
+      lastAt:      serverTimestamp(),
+      lastFrom:    currentUser.uid,
+    };
+    if (peerId) {
+      const convMeta = allConvs.find(c => c.id === activeConvId);
+      upd[`unread.${peerId}`] = (convMeta?.unread?.[peerId] || 0) + 1;
+    }
     await updateDoc(doc(db, 'conversations', activeConvId), upd);
   } catch (err) {
-    console.error('[Image upload]', err);
-    showToast('Upload failed: ' + err.message, 'danger');
-  } finally {
-    if (btn) btn.style.opacity = '1';
+    showToast('Failed to send voice: ' + err.message, 'danger');
   }
-}
-
-// Image lightbox
-function openLightbox(url) {
-  let box = $('lightbox');
-  if (!box) {
-    box = document.createElement('div');
-    box.id = 'lightbox';
-    box.className = 'lightbox';
-    box.innerHTML = `<div class="lightbox-inner">
-      <button class="lightbox-close" onclick="closeLightbox()">&#x2715;</button>
-      <img id="lightbox-img" src="" alt="Full size"/>
-    </div>`;
-    box.addEventListener('click', e => { if (e.target === box) closeLightbox(); });
-    document.body.appendChild(box);
-  }
-  $('lightbox-img').src = url;
-  box.classList.add('open');
-  document.body.style.overflow = 'hidden';
-}
-function closeLightbox() {
-  $('lightbox')?.classList.remove('open');
-  document.body.style.overflow = '';
 }
 
 // ── GIF PICKER ──────────────────────────────────────────────
@@ -803,17 +874,19 @@ function subscribePeerStatus(peerUid) {
 async function initNotifications() {
   if (!('Notification' in window)) return;
   if (Notification.permission === 'default') {
-    await Notification.requestPermission();
+    // Delay slightly so it doesn't fire before user interaction (browsers block it)
+    setTimeout(() => Notification.requestPermission(), 2000);
   }
 }
 
 function showBrowserNotification(title, body, iconUrl) {
-  if (document.hasFocus()) return;                      // only when tab is hidden
   if (Notification.permission !== 'granted') return;
   const n = new Notification(title, {
     body,
     icon: iconUrl || '/favicon.ico',
     badge: '/favicon.ico',
+    tag:  title,           // collapse duplicate notifs from same sender
+    renotify: true,
   });
   n.onclick = () => { window.focus(); n.close(); };
   setTimeout(() => n.close(), 6000);
@@ -862,9 +935,40 @@ function toggleDropdown() { $('dropdown-menu')?.classList.toggle('hidden'); }
 
 // �"?�"? EMOJI PICKER �"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?
 function buildEmojiPicker() {
+  const picker = $('emoji-picker');
+  if (!picker) return;
+
+  // Category tabs
+  const tabBar = document.createElement('div');
+  tabBar.className = 'emoji-tabs';
+  EMOJI_CATEGORIES.forEach((cat, idx) => {
+    const tab = document.createElement('button');
+    tab.className = `emoji-tab-btn${idx === 0 ? ' active' : ''}`;
+    tab.textContent = cat.icon;
+    tab.title = cat.label;
+    tab.onclick = () => {
+      tabBar.querySelectorAll('.emoji-tab-btn').forEach(t => t.classList.remove('active'));
+      tab.classList.add('active');
+      renderEmojiGrid(cat.emojis);
+    };
+    tabBar.appendChild(tab);
+  });
+  picker.appendChild(tabBar);
+
+  // Grid
+  const grid = document.createElement('div');
+  grid.className = 'emoji-grid';
+  grid.id = 'emoji-grid';
+  picker.appendChild(grid);
+
+  renderEmojiGrid(EMOJI_CATEGORIES[0].emojis);
+}
+
+function renderEmojiGrid(emojis) {
   const grid = $('emoji-grid');
   if (!grid) return;
-  EMOJIS.forEach(emoji => {
+  grid.innerHTML = '';
+  emojis.forEach(emoji => {
     const btn = document.createElement('button');
     btn.className = 'emoji-btn';
     btn.textContent = emoji;
@@ -877,7 +981,12 @@ function buildEmojiPicker() {
     grid.appendChild(btn);
   });
 }
-function toggleEmojiPicker() { $('emoji-picker')?.classList.toggle('hidden'); }
+function toggleEmojiPicker() {
+  const p = $('emoji-picker');
+  if (!p) return;
+  p.classList.toggle('hidden');
+  $('gif-picker')?.classList.add('hidden');
+}
 
 // �"?�"? NEW CHAT MODAL �"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?
 // "New Chat" opens the friend list (users who share a conv)
@@ -1292,39 +1401,14 @@ async function declineRequest(reqId) {
   showToast('Request declined.');
 }
 
-// ── MY PROFILE & AVATAR ────────────────────────────────────────────────────
-function refreshMyAvatar() {
-  const av = $('my-avatar');
-  if (!av) return;
-  if (currentProfile?.photoURL) {
-    av.textContent = '';
-    av.style.background = 'transparent';
-    if (!av.querySelector('img')) {
-      const img = document.createElement('img');
-      img.style.cssText = 'width:100%;height:100%;object-fit:cover;border-radius:50%';
-      av.appendChild(img);
-    }
-    av.querySelector('img').src = currentProfile.photoURL;
-  } else {
-    av.innerHTML = (currentProfile?.name || '?').charAt(0).toUpperCase();
-    av.style.background = currentProfile?.color || '#6C63FF';
-  }
-}
-
 function openMyProfile() {
   const modal = $('my-profile-modal');
   if (!modal || !currentProfile) return;
-
-  // Large avatar
   const lgAv = $('my-profile-avatar-lg');
-  if (currentProfile.photoURL) {
-    lgAv.innerHTML = `<img src="${currentProfile.photoURL}" alt="avatar"/>`;
-    lgAv.style.background = 'transparent';
-  } else {
+  if (lgAv) {
     lgAv.textContent = (currentProfile.name || '?').charAt(0).toUpperCase();
     lgAv.style.background = currentProfile.color || '#6C63FF';
   }
-
   $('my-profile-name').textContent  = currentProfile.name || '';
   $('my-profile-email').textContent = currentUser?.email || '';
   modal.classList.remove('hidden');
@@ -1332,40 +1416,6 @@ function openMyProfile() {
 
 function closeMyProfile() {
   $('my-profile-modal')?.classList.add('hidden');
-}
-
-function triggerAvatarUpload() {
-  $('avatar-file-input')?.click();
-}
-
-async function handleAvatarFileSelected(input) {
-  const file = input.files?.[0];
-  if (!file) return;
-  if (!file.type.startsWith('image/')) { showToast('Please select an image file.', 'warning'); return; }
-  if (file.size > 5 * 1024 * 1024) { showToast('Image must be under 5 MB.', 'warning'); return; }
-
-  showToast('Uploading avatar…', 'info');
-  try {
-    const ext  = file.name.split('.').pop();
-    const ref  = storageRef(storage, `avatars/${currentUser.uid}/avatar.${ext}`);
-    await uploadBytes(ref, file);
-    const url  = await getDownloadURL(ref);
-
-    // Persist
-    await updateDoc(doc(db, 'users', currentUser.uid), { photoURL: url });
-    await updateProfile(currentUser, { photoURL: url });
-    currentProfile.photoURL = url;
-
-    // Refresh UI
-    refreshMyAvatar();
-    openMyProfile();          // refresh modal avatar
-    showToast('Avatar updated!', 'success');
-  } catch (err) {
-    console.error('[Avatar upload]', err);
-    showToast('Avatar upload failed: ' + err.message, 'danger');
-  } finally {
-    input.value = '';
-  }
 }
 
 // �"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?
@@ -1381,8 +1431,8 @@ Object.assign(window, {
   toggleEmojiPicker, openNewChat, closeNewChat, filterModal,
   closeProfilePanel, openSettings, closeSettings, toggleDark,
   closeMobileChat, logout, showToast,
-  // Images
-  triggerImageUpload, handleImageFileSelected, openLightbox, closeLightbox,
+  // Voice
+  startVoiceRecording, stopAndSendVoice, cancelVoiceRecording,
   // GIF
   toggleGifPicker, closeGifPicker, onGifSearchInput, sendGif,
   // Add Friend
@@ -1390,6 +1440,6 @@ Object.assign(window, {
   searchFriends, clearFriendSearch,
   sendFriendRequest, messageExisting,
   acceptRequest, declineRequest,
-  // My Profile / Avatar
-  openMyProfile, closeMyProfile, triggerAvatarUpload, handleAvatarFileSelected,
+  // My Profile
+  openMyProfile, closeMyProfile,
 });
