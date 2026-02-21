@@ -1318,6 +1318,23 @@ body.dark .af-requests-bar { background: rgba(108,99,255,.14); }
   .sidebar-footer {
     padding: 8px 12px;
   }
+
+  /* ── Mobile sidebar: footer always on-screen ──
+     The sidebar must clip overflow so the contact list
+     scrolls internally and never pushes the footer below
+     the visible viewport. */
+  .sidebar {
+    /* dvh = dynamic viewport height — shrinks when browser chrome
+       appears/disappears on iOS/Android, preventing scroll bleed */
+    height: 100dvh;
+    overflow: hidden;
+  }
+  /* Ensure the scrollable list can shrink below its content height
+     (flexbox won't shrink a flex-child below its min-content by default) */
+  .contact-list {
+    min-height: 0;
+    overflow-y: auto;
+  }
 }
 /* ===== IMAGE MESSAGES ===== */
 .msg-gif {
