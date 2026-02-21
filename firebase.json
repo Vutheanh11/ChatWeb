@@ -1,0 +1,17 @@
+{
+  "firestore": {
+    "rules": "firestore.rules"
+  },
+  "storage": {
+    "rules": "storage.rules",
+    "bucket": "web-message-e1dc4.firebasestorage.app"
+  },
+  "hosting": {
+    "public": ".",
+    "ignore": [
+      "firebase.json",
+      "*.rules",
+      "node_modules"
+    ]
+  }
+}
