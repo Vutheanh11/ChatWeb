@@ -599,6 +599,7 @@ body.dark .status-offline { background: #4b5563; }
   word-break: break-word;
   position: relative;
   animation: popIn .2s ease;
+  overflow: hidden;
 }
 @keyframes popIn {
   from { opacity: 0; transform: scale(.92) translateY(6px); }
@@ -1237,6 +1238,10 @@ body.dark .af-requests-bar { background: rgba(108,99,255,.14); }
     border-right: none;
   }
 
+  /* GIF images fully contained on mobile */
+  .bubble { max-width: 80%; }
+  .bubble.gif-bubble { max-width: 80%; padding: 3px; }
+
   /* Modals full screen on mobile */
   .modal {
     width: 100%;
@@ -1259,9 +1264,20 @@ body.dark .af-requests-bar { background: rgba(108,99,255,.14); }
 }
 /* ===== IMAGE MESSAGES ===== */
 .msg-gif {
-  max-width: 240px;
-  border-radius: 12px;
   display: block;
+  max-width: min(240px, 100%);
+  width: auto;
+  height: auto;
+  border-radius: 10px;
+}
+/* GIF bubble: remove inner padding so image fills edge-to-edge */
+.bubble.gif-bubble {
+  padding: 3px;
+  max-width: 72%;
+}
+.bubble.gif-bubble .bubble-footer {
+  padding: 0 8px 4px;
+  margin-top: 2px;
 }
 
 /* ===== GIF PICKER ===== */

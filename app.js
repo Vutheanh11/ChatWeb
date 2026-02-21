@@ -907,7 +907,7 @@ function renderMessages(msgs) {
 
     row.innerHTML = `
       ${avatarHtml}
-      <div class="bubble${isRecalled ? ' recalled' : ''}">
+      <div class="bubble${isRecalled ? ' recalled' : ''}${mtype === 'gif' ? ' gif-bubble' : ''}">
         ${bodyHtml}
         <div class="bubble-footer">
           <span class="msg-time">${time}</span>
