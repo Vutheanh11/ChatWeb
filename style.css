@@ -75,7 +75,7 @@ input, [contenteditable] { outline: none; }
   overflow: hidden;
   transition: background .3s;
 }
-body.dark .auth-body {
+body.dark.auth-body {
   background: linear-gradient(135deg, #0d0f1a 0%, #1a1d2e 100%);
 }
 
