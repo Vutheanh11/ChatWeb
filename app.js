@@ -16,7 +16,7 @@ import {
 import {
   getFirestore,
   collection, doc, setDoc, getDoc, getDocs,
-  addDoc, updateDoc,
+  addDoc, updateDoc, deleteDoc,
   query, where, orderBy, limit,
   onSnapshot, serverTimestamp,
 } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js';
@@ -277,9 +277,17 @@ const BANNED_WORDS = [
 ];
 
 async function checkAndRecordViolation(text) {
-  const lower = text.toLowerCase().replace(/[^a-z0-9\s]/g, ' ');
-  const words  = lower.split(/\s+/);
-  const hit    = BANNED_WORDS.some(bw => words.some(w => w === bw || w.includes(bw)));
+  // Strip invisible / zero-width characters, then lowercase
+  const normalized = text
+    .replace(/[\u200b-\u200f\u202a-\u202e\u2060-\u206f\ufeff]/g, '')
+    .toLowerCase();
+  // Match even if letters are separated by punctuation/digits acting as leet-speak
+  const stripped = normalized.replace(/[^a-z]/g, ''); // no spaces version
+  const spaced   = normalized.replace(/[^a-z\s]/g, ' '); // spaces version
+  const hit = BANNED_WORDS.some(bw => {
+    const bwClean = bw.replace(/[^a-z]/g, '');
+    return spaced.includes(bw) || stripped.includes(bwClean);
+  });
   if (!hit) return true;
 
   const userRef = doc(db, 'users', currentUser.uid);
@@ -320,21 +328,32 @@ function clearReplyTo() {
   $('reply-preview-bar')?.classList.add('hidden');
 }
 
+
+
+
+// �"?�"? CHAT INIT �"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?
+
+
 function showMsgMenu(event, msgId, isMe, msgText, msgFromName) {
   event.stopPropagation();
   const menu = $('msg-context-menu');
   if (!menu) return;
   const encoded  = btoa(encodeURIComponent(String(msgText).slice(0, 200)));
-  const safeName = String(msgFromName).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-  menu.innerHTML =
-    `<button class="msg-menu-item" onclick="setReplyTo('${msgId}',decodeURIComponent(atob('${encoded}')),'${safeName}')">` +
-    `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polyline points="9 17 4 12 9 7"/><path d="M20 18v-2a4 4 0 00-4-4H4"/></svg>Reply</button>` +
-    (isMe
-      ? `<button class="msg-menu-item danger" onclick="recallMessage('${msgId}')">` +
-        `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 102.13-9.36L1 10"/></svg>Recall message</button>`
-      : '');
+  const safeName = String(msgFromName).replace(/'/g, "\\'");
 
-  const menuW = 180, menuH = isMe ? 88 : 44;
+  const replyBtn = `<button class="msg-menu-item" onclick="setReplyTo('${msgId}',decodeURIComponent(atob('${encoded}')),'${safeName}')">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polyline points="9 17 4 12 9 7"/><path d="M20 18v-2a4 4 0 00-4-4H4"/></svg>Reply</button>`;
+  const recallBtn = isMe ? `<button class="msg-menu-item" onclick="recallMessage('${msgId}')">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 102.13-9.36L1 10"/></svg>Recall</button>` : '';
+  const deleteBtn = isMe ? `<button class="msg-menu-item danger" onclick="deleteMsg('${msgId}')">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg>Delete</button>` : '';
+  const selectBtn = `<button class="msg-menu-item" onclick="enterSelectMode('${msgId}')">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polyline points="9 11 5 15 3 13"/><line x1="13" y1="13" x2="21" y2="13"/><line x1="13" y1="17" x2="21" y2="17"/><line x1="13" y1="9" x2="21" y2="9"/></svg>Select messages</button>`;
+
+  menu.innerHTML = replyBtn + recallBtn + deleteBtn + selectBtn;
+
+  const itemCount = 2 + (isMe ? 2 : 0);
+  const menuW = 185, menuH = itemCount * 40 + 8;
   let top  = event.clientY + 4;
   let left = event.clientX - menuW + 16;
   if (left < 8)                             left = 8;
@@ -364,8 +383,130 @@ async function recallMessage(msgId) {
   }
 }
 
+async function deleteMsg(msgId) {
+  hideMsgMenu();
+  if (!activeConvId) return;
+  try {
+    await deleteDoc(doc(db, 'conversations', activeConvId, 'messages', msgId));
+    showToast('Message deleted.', 'success');
+  } catch (err) {
+    showToast('Failed to delete: ' + err.message, 'danger');
+  }
+}
 
-// �"?�"? CHAT INIT �"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?
+// ── SELECT MODE ───────────────────────────────────────────────
+let _selectMode   = false;
+let _selectedMsgs = new Set();
+
+function enterSelectMode(firstMsgId) {
+  hideMsgMenu();
+  _selectMode = true;
+  _selectedMsgs = new Set([firstMsgId]);
+  rerenderSelectBar();
+  const area = $('messages-area');
+  if (!area) return;
+  area.querySelectorAll('.msg-row').forEach(row => {
+    const id = row.dataset.msgId;
+    if (!id) return;
+    let cb = row.querySelector('.msg-checkbox');
+    if (!cb) {
+      cb = document.createElement('input');
+      cb.type = 'checkbox';
+      cb.className = 'msg-checkbox';
+      cb.onchange = () => toggleMsgSelect(id, cb.checked);
+      row.prepend(cb);
+    }
+    cb.checked = _selectedMsgs.has(id);
+    row.classList.add('select-mode');
+    if (_selectedMsgs.has(id)) row.classList.add('selected');
+  });
+}
+
+function exitSelectMode() {
+  _selectMode = false;
+  _selectedMsgs = new Set();
+  $('select-actions-bar')?.classList.add('hidden');
+  const area = $('messages-area');
+  if (area) area.querySelectorAll('.msg-row').forEach(row => {
+    row.classList.remove('select-mode', 'selected');
+    row.querySelector('.msg-checkbox')?.remove();
+  });
+}
+
+function toggleMsgSelect(msgId, checked) {
+  if (checked) _selectedMsgs.add(msgId);
+  else         _selectedMsgs.delete(msgId);
+  const row = $('messages-area')?.querySelector(`[data-msg-id="${msgId}"]`);
+  row?.classList.toggle('selected', checked);
+  rerenderSelectBar();
+  if (_selectedMsgs.size === 0) exitSelectMode();
+}
+
+function rerenderSelectBar() {
+  const bar = $('select-actions-bar');
+  if (!bar) return;
+  const n = _selectedMsgs.size;
+  if (n === 0) { bar.classList.add('hidden'); return; }
+  bar.classList.remove('hidden');
+  $('select-count').textContent = `${n} selected`;
+}
+
+async function deleteSelectedMsgs() {
+  if (!activeConvId || _selectedMsgs.size === 0) return;
+  try {
+    await Promise.all([..._selectedMsgs].map(id =>
+      deleteDoc(doc(db, 'conversations', activeConvId, 'messages', id))
+    ));
+    showToast(`Deleted ${_selectedMsgs.size} message${_selectedMsgs.size > 1 ? 's' : ''}.`, 'success');
+  } catch (err) {
+    showToast('Failed to delete: ' + err.message, 'danger');
+  }
+  exitSelectMode();
+}
+
+// ── BLOCK USER ────────────────────────────────────────────────
+let blockedUsers = {}; // { [uid]: true }
+
+async function loadBlockedUsers() {
+  if (!currentUser) return;
+  const snap = await getDoc(doc(db, 'users', currentUser.uid));
+  blockedUsers = snap.data()?.blocked || {};
+}
+
+async function blockUser(peerId) {
+  if (!peerId || !currentUser) return;
+  const isBlocked = !!blockedUsers[peerId];
+  try {
+    if (isBlocked) delete blockedUsers[peerId];
+    else           blockedUsers[peerId] = true;
+    await updateDoc(doc(db, 'users', currentUser.uid), { blocked: blockedUsers });
+    renderConvList(getFilteredConvs($('search-input')?.value || ''));
+    updateBlockBtn(peerId);
+    updateBlockedBanner();
+    showToast(isBlocked ? 'User unblocked.' : 'User blocked.', 'success');
+  } catch (err) {
+    showToast('Error: ' + err.message, 'danger');
+  }
+}
+
+function updateBlockBtn(peerId) {
+  const btn = $('pp-block-btn');
+  if (!btn || !peerId) return;
+  const isBlocked = !!blockedUsers[peerId];
+  btn.textContent = isBlocked ? '\uD83D\uDD13 Unblock User' : '\uD83D\uDEAB Block User';
+  btn.className   = isBlocked ? 'pp-action-btn' : 'pp-action-btn danger';
+}
+
+function updateBlockedBanner() {
+  const banner  = $('blocked-banner');
+  const toolbar = $('input-toolbar');
+  if (!activePeer) return;
+  const isBlocked = !!blockedUsers[activePeer.uid];
+  banner?.classList.toggle('hidden',  !isBlocked);
+  toolbar?.classList.toggle('hidden',  isBlocked);
+}
+
+
 if (IS_CHAT) {
   applyTheme();
 
@@ -1580,6 +1721,9 @@ Object.assign(window, {
   closeMobileChat, logout, showToast,
   // Message actions
   setReplyTo, clearReplyTo, showMsgMenu, hideMsgMenu, recallMessage,
+  deleteMsg, enterSelectMode, exitSelectMode, toggleMsgSelect,
+  rerenderSelectBar, deleteSelectedMsgs,
+  blockUser, loadBlockedUsers, updateBlockBtn, updateBlockedBanner,
   // Voice
   startVoiceRecording, stopAndSendVoice, cancelVoiceRecording,
   // GIF
