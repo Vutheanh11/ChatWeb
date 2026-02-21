@@ -1280,7 +1280,7 @@ body.dark .af-requests-bar { background: rgba(108,99,255,.14); }
 
   /* GIF images fully contained on mobile */
   .bubble { max-width: 80%; }
-  .bubble.gif-bubble { max-width: 80%; padding: 3px; width: fit-content; }
+  .bubble.gif-bubble { max-width: 80%; padding: 0; width: fit-content; background: transparent !important; box-shadow: none !important; }
   .msg-gif { width: 200px; }   /* slightly smaller GIF on mobile */
 
   /* Modals full screen on mobile (bottom sheet) */
@@ -1322,25 +1322,34 @@ body.dark .af-requests-bar { background: rgba(108,99,255,.14); }
 /* ===== IMAGE MESSAGES ===== */
 .msg-gif {
   display: block;
-  /* Explicit width so the parent gif-bubble fit-content resolves to exactly this */
   width: 240px;
-  max-width: 100%;   /* never overflow the bubble on very small screens */
+  max-width: 100%;
   height: auto;
-  border-radius: 10px;
+  border-radius: 12px;   /* rounded corners on the image itself */
+  box-shadow: 0 2px 10px rgba(0,0,0,.18);
 }
-/* GIF bubble: shrink-wrap around the image (block + fit-content is the
-   simplest reliable approach — inline-flex inside a flex row causes
-   incorrect width resolution in most browsers) */
+/* GIF bubble: frameless — no background, no border, no shadow */
 .bubble.gif-bubble {
-  padding: 3px;
+  padding: 0;
   max-width: 72%;
-  width: fit-content;   /* hug the 240px image + 6px padding ≈ 246px */
-  display: block;       /* keep block so bubble-footer doesn't fight sizing */
-  overflow: visible;    /* let the image define the boundary */
+  width: fit-content;
+  display: block;
+  background: transparent !important;
+  box-shadow: none !important;
+  border-radius: 0 !important;
+  overflow: visible;
+}
+/* Override per-side bubble colors for gif-bubble */
+.msg-row:not(.me) .bubble.gif-bubble,
+.msg-row.me .bubble.gif-bubble {
+  background: transparent !important;
+  box-shadow: none !important;
 }
 .bubble.gif-bubble .bubble-footer {
-  padding: 0 6px 4px;
-  margin-top: 2px;
+  padding: 2px 4px 0;
+  margin-top: 3px;
+  /* timestamp text adapts to context color */
+  color: var(--text-muted);
 }
 
 /* ===== GIF PICKER — floats above input bar ===== */
@@ -2043,6 +2052,17 @@ body.dark.chat-theme-pixel .msg-row.me .bubble {
   color: #ce93d8 !important;
   border-color: #ce93d8;
   box-shadow: 3px 3px 0 #ce93d8 !important;
+}
+/* Pixel theme: GIF bubble stays frameless */
+body.chat-theme-pixel .bubble.gif-bubble,
+body.chat-theme-pixel .msg-row:not(.me) .bubble.gif-bubble,
+body.chat-theme-pixel .msg-row.me .bubble.gif-bubble,
+body.dark.chat-theme-pixel .msg-row:not(.me) .bubble.gif-bubble,
+body.dark.chat-theme-pixel .msg-row.me .bubble.gif-bubble {
+  background: transparent !important;
+  box-shadow: none !important;
+  border: none !important;
+  border-radius: 0 !important;
 }
 /* Pixel typing dots */
 body.chat-theme-pixel .typing-dots {
