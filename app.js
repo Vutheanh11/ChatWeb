@@ -588,6 +588,7 @@ async function loadBlockedUsers() {
 }
 
 async function blockUser(peerId) {
+  peerId = peerId || activePeer?.uid;   // fall back to module-scoped activePeer
   if (!peerId || !currentUser) return;
   const isBlocked = !!blockedUsers[peerId];
   try {
@@ -1293,6 +1294,7 @@ let _vc_unsubIncoming = null;
 let _vc_incomingName  = '';
 
 async function startVoiceCall(peerId) {
+  peerId = peerId || activePeer?.uid;   // fall back to module-scoped activePeer
   if (!currentUser || !peerId) { showToast('Select a conversation first.', 'warning'); return; }
   if (_vc_pc) { showToast('Already in a call.', 'warning'); return; }
   try {
