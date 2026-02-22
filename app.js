@@ -1286,6 +1286,18 @@ const STUN_SERVERS = {
   iceServers: [
     { urls: 'stun:stun.l.google.com:19302' },
     { urls: 'stun:stun1.l.google.com:19302' },
+    { urls: 'stun:stun2.l.google.com:19302' },
+    { urls: 'stun:stun3.l.google.com:19302' },
+    { urls: 'stun:stun4.l.google.com:19302' },
+    {
+      urls: [
+        'turn:openrelay.metered.ca:80',
+        'turn:openrelay.metered.ca:443',
+        'turns:openrelay.metered.ca:443',
+      ],
+      username:   'openrelayproject',
+      credential: 'openrelayproject',
+    },
   ],
 };
 let _vc_pc           = null;
@@ -1303,6 +1315,7 @@ let _vc_unsubCallerIC = null;
 let _vc_unsubCalleeIC = null;
 let _vc_unsubIncoming = null;
 let _vc_incomingName  = '';
+let _vc_pendingIC     = [];  // buffer callee ICE candidates until setRemoteDescription(answer)
 
 async function startVoiceCall(peerId) {
   peerId = peerId || activePeer?.uid;   // fall back to module-scoped activePeer
@@ -1346,14 +1359,25 @@ async function startVoiceCall(peerId) {
     if (d.status === 'ended')    { _vcCleanup('Call ended.');    return; }
     if (d.answer && _vc_pc && !_vc_pc.remoteDescription) {
       await _vc_pc.setRemoteDescription(new RTCSessionDescription(d.answer));
+      // drain any callee ICE candidates that arrived before the answer
+      for (const c of _vc_pendingIC) {
+        await _vc_pc.addIceCandidate(c).catch(() => {});
+      }
+      _vc_pendingIC = [];
       _vcShowUI('active', activePeer?.name || 'Unknown');
       _vcStartTimer();
     }
   });
   _vc_unsubCalleeIC = onSnapshot(collection(db, 'calls', _vc_callId, 'calleeCandidates'), snap => {
     snap.docChanges().forEach(async ch => {
-      if (ch.type === 'added' && _vc_pc)
-        await _vc_pc.addIceCandidate(new RTCIceCandidate(ch.doc.data())).catch(() => {});
+      if (ch.type === 'added') {
+        const c = new RTCIceCandidate(ch.doc.data());
+        if (_vc_pc?.remoteDescription) {
+          await _vc_pc.addIceCandidate(c).catch(() => {});
+        } else {
+          _vc_pendingIC.push(c);  // buffer until setRemoteDescription(answer)
+        }
+      }
     });
   });
 }
@@ -1460,6 +1484,7 @@ function _vcCleanup(msg) {
   if (_vc_remoteAudio) { _vc_remoteAudio.srcObject = null; _vc_remoteAudio = null; }
   const rv = $('remote-video'); if (rv) rv.srcObject = null;
   const lv = $('local-video');  if (lv) lv.srcObject = null;
+  _vc_pendingIC = [];
   clearInterval(_vc_timerInt); _vc_timerInt = null;
   _vc_callId = null; _vc_role = null; _vc_muted = false; _vc_camOff = false; _vc_type = 'audio';
   ['call-outgoing','call-incoming','call-active',
@@ -1536,14 +1561,25 @@ async function startVideoCall(peerId) {
     if (d.status === 'ended')    { _vcCleanup('Call ended.');    return; }
     if (d.answer && _vc_pc && !_vc_pc.remoteDescription) {
       await _vc_pc.setRemoteDescription(new RTCSessionDescription(d.answer));
+      // drain any callee ICE candidates that arrived before the answer
+      for (const c of _vc_pendingIC) {
+        await _vc_pc.addIceCandidate(c).catch(() => {});
+      }
+      _vc_pendingIC = [];
       _vcShowUI('video-active', activePeer?.name || 'Unknown');
       _vcStartTimer();
     }
   });
   _vc_unsubCalleeIC = onSnapshot(collection(db, 'calls', _vc_callId, 'calleeCandidates'), snap => {
     snap.docChanges().forEach(async ch => {
-      if (ch.type === 'added' && _vc_pc)
-        await _vc_pc.addIceCandidate(new RTCIceCandidate(ch.doc.data())).catch(() => {});
+      if (ch.type === 'added') {
+        const c = new RTCIceCandidate(ch.doc.data());
+        if (_vc_pc?.remoteDescription) {
+          await _vc_pc.addIceCandidate(c).catch(() => {});
+        } else {
+          _vc_pendingIC.push(c);  // buffer until setRemoteDescription(answer)
+        }
+      }
     });
   });
 }
