@@ -1379,9 +1379,81 @@ body.dark .af-requests-bar { background: rgba(108,99,255,.14); }
 .bubble.gif-bubble .bubble-footer {
   padding: 2px 4px 0;
   margin-top: 3px;
-  /* timestamp text adapts to context color */
   color: var(--text-muted);
 }
+
+/* ===== IMAGE MESSAGES ===== */
+.msg-img {
+  display: block;
+  max-width: 260px;
+  max-height: 320px;
+  width: auto;
+  height: auto;
+  border-radius: 12px;
+  box-shadow: 0 2px 10px rgba(0,0,0,.18);
+  cursor: zoom-in;
+  object-fit: cover;
+}
+.bubble.image-bubble {
+  padding: 0;
+  max-width: 72%;
+  width: fit-content;
+  display: block;
+  background: transparent !important;
+  box-shadow: none !important;
+  border-radius: 0 !important;
+  overflow: visible;
+}
+.msg-row:not(.me) .bubble.image-bubble,
+.msg-row.me .bubble.image-bubble {
+  background: transparent !important;
+  box-shadow: none !important;
+}
+.bubble.image-bubble .bubble-footer {
+  padding: 2px 4px 0;
+  margin-top: 3px;
+  color: var(--text-muted);
+}
+
+/* ===== IMAGE FULLSCREEN VIEWER ===== */
+.img-viewer-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  background: rgba(0,0,0,.92);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: zoom-out;
+}
+.img-viewer-overlay.hidden { display: none !important; }
+.img-viewer-img {
+  max-width: 94vw;
+  max-height: 90vh;
+  object-fit: contain;
+  border-radius: 8px;
+  box-shadow: 0 8px 40px rgba(0,0,0,.6);
+  cursor: default;
+}
+.img-viewer-close {
+  position: absolute;
+  top: 18px;
+  right: 22px;
+  background: rgba(255,255,255,.12);
+  border: none;
+  color: #fff;
+  font-size: 28px;
+  line-height: 1;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background .2s;
+}
+.img-viewer-close:hover { background: rgba(255,255,255,.25); }
 
 /* ===== GIF PICKER — floats above input bar ===== */
 .gif-picker {

@@ -1052,6 +1052,8 @@ function renderMessages(msgs) {
       bodyHtml = `<span class="recalled-text">\uD83D\uDD04 Message recalled</span>`;
     } else if (mtype === 'gif') {
       bodyHtml = `<img class="msg-gif" src="${m.gifUrl}" alt="GIF" loading="lazy"/>`;
+    } else if (mtype === 'image') {
+      bodyHtml = `<img class="msg-img" src="${m.imageUrl}" alt="Image" loading="lazy" onclick="openImgViewer('${m.imageUrl}')"/>`;
     } else if (mtype === 'voice') {
       const dur = m.duration ? ` (${m.duration}s)` : '';
       bodyHtml = `
@@ -1089,7 +1091,7 @@ function renderMessages(msgs) {
 
     row.innerHTML = `
       ${avatarHtml}
-      <div class="bubble${isRecalled ? ' recalled' : ''}${mtype === 'gif' ? ' gif-bubble' : ''}">
+      <div class="bubble${isRecalled ? ' recalled' : ''}${mtype === 'gif' ? ' gif-bubble' : ''}${mtype === 'image' ? ' image-bubble' : ''}">
         ${bodyHtml}
         <div class="bubble-footer">
           <span class="msg-time">${time}</span>
@@ -1647,6 +1649,61 @@ async function loadGifs(searchQuery) {
 function onGifSearchInput(query) {
   clearTimeout(gifSearchTimer);
   gifSearchTimer = setTimeout(() => loadGifs(query), 400);
+}
+
+async function handleImageFile(event) {
+  const file = event.target.files?.[0];
+  event.target.value = '';
+  if (!file) return;
+  if (file.size > 32 * 1024 * 1024) { showToast('Ảnh quá lớn (tối đa 32 MB).', 'warning'); return; }
+  await sendImage(file);
+}
+
+async function sendImage(file) {
+  if (!activeConvId) { showToast('Chọn cuộc trò chuyện trước.', 'warning'); return; }
+  if (_blockedByPeer) { showToast('Bạn đã bị khóa mồm và không thể gửi tin nhắn.', 'danger'); return; }
+  if (activePeer && blockedUsers[activePeer.uid]) { showToast('You have blocked this user.', 'warning'); return; }
+
+  showToast('Đang tải ảnh lên…', 'info');
+  try {
+    const formData = new FormData();
+    formData.append('image', file);
+    const res  = await fetch('https://api.imgbb.com/1/upload?key=a8bf00fbdf3bd7890b5dcc1e3df39d30', { method: 'POST', body: formData });
+    const json = await res.json();
+    if (!json.success) throw new Error(json.error?.message || 'Upload failed');
+    const imageUrl = json.data.url;
+    const thumbUrl = json.data.thumb?.url || imageUrl;
+
+    await addDoc(collection(db, 'conversations', activeConvId, 'messages'), {
+      from:      currentUser.uid,
+      type:      'image',
+      imageUrl:  imageUrl,
+      thumbUrl:  thumbUrl,
+      text:      '[Image]',
+      sentAt:    serverTimestamp(),
+    });
+    const peerId = activePeer?.uid;
+    const upd = { lastMessage: '[Image]', lastAt: serverTimestamp(), lastFrom: currentUser.uid };
+    if (peerId) upd[`unread.${peerId}`] = (allConvs.find(c => c.id === activeConvId)?.unread?.[peerId] || 0) + 1;
+    await updateDoc(doc(db, 'conversations', activeConvId), upd);
+  } catch (err) {
+    showToast('Không thể gửi ảnh: ' + err.message, 'danger');
+  }
+}
+
+function openImgViewer(url) {
+  const overlay = $('img-viewer-overlay');
+  const img     = $('img-viewer-img');
+  if (!overlay || !img) return;
+  img.src = url;
+  overlay.classList.remove('hidden');
+  document.body.style.overflow = 'hidden';
+}
+
+function closeImgViewer() {
+  const overlay = $('img-viewer-overlay');
+  if (overlay) overlay.classList.add('hidden');
+  document.body.style.overflow = '';
 }
 
 async function sendGif(gifUrl, previewUrl) {
@@ -2316,6 +2373,8 @@ Object.assign(window, {
   startVideoCall, toggleVideoCamera,
   // GIF
   toggleGifPicker, closeGifPicker, onGifSearchInput, sendGif,
+  // Image
+  handleImageFile, openImgViewer, closeImgViewer,
   // Add Friend
   openAddFriend, closeAddFriend, switchAFTab, viewRequests,
   searchFriends, clearFriendSearch,

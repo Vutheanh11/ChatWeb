@@ -7,18 +7,11 @@
     "bucket": "web-message-e1dc4.firebasestorage.app"
   },
   "hosting": {
-    "public": "frontend",
+    "public": ".",
     "ignore": [
       "firebase.json",
       "*.rules",
       "node_modules"
-    ],
-    "rewrites": [
-      { "source": "**", "destination": "/index.html" }
     ]
-  },
-  "functions": {
-    "source": "functions",
-    "runtime": "nodejs18"
   }
 }
